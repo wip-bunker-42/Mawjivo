@@ -5,7 +5,7 @@
   "identifier": "com.aimansour.mawjivo",
   "build": {
     "beforeDevCommand": "pnpm dev",
-    "beforeBuildCommand": "pnpm -w service:artifact && pnpm build",
+    "beforeBuildCommand": "pnpm -w media:tools && pnpm -w service:artifact && pnpm build",
     "devUrl": "http://127.0.0.1:1420",
     "frontendDist": "../dist"
   },
@@ -28,6 +28,7 @@
     "active": true,
     "targets": ["nsis"],
     "publisher": "Mawjivo",
+    "resources": { "media-tools/": "media-tools/" },
     "shortDescription": "النشر الشخصي والجدولة",
     "windows": {
       "nsis": {

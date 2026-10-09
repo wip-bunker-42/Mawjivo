@@ -13,7 +13,7 @@ export function videoFilename(title: string, extension: string): string {
     basename = 'فيديو-' + basename;
   let safe = '';
   for (const { segment } of segmenter.segment(basename)) {
-    if (safe.length + segment.length + ext.length + 1 > 240) break;
+    if (safe.length + segment.length + ext.length + 1 > 180) break;
     safe += segment;
   }
   return safe.trimEnd().replace(/[. ]+$/g, '') + '.' + ext;

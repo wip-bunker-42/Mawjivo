@@ -6,6 +6,15 @@ import { DraftSchema, PostPlanSchema } from '../src/schemas';
 import { caps, draft, photo, video } from './fixtures';
 const now = '2026-10-09T10:00:00Z';
 describe('publication plans', () => {
+  test('gif_to_jpeg_reports_first_frame_before_confirmation', () => {
+    const source = { ...photo(), mimeType: 'image/gif' };
+    const plan = buildPlan(draft({ assets: [source], selections: ['instagram'] }), caps(), now);
+    expect(
+      plan.notes.some(
+        (n) => n.code === 'ANIMATION_FIRST_FRAME' && n.facts.sourceAssetId === source.id,
+      ),
+    ).toBe(true);
+  });
   test('text_only_targets_three_supported_platforms', () => {
     const plan = buildPlan(draft(), caps(), now);
     expect(plan.targets.map((t) => t.platform).sort()).toEqual(['facebook', 'threads', 'x']);

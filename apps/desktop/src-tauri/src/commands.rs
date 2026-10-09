@@ -176,6 +176,7 @@ pub fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         store,
         setup_lock: tokio::sync::Mutex::new(()),
     });
+    crate::media::jobs::setup(app)?;
     Ok(())
 }
 #[cfg(test)]

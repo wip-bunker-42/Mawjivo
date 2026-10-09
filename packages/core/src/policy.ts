@@ -13,7 +13,7 @@ import type {
   PostPlan,
   TargetPlan,
 } from './contracts';
-export const POLICY_VERSION = '2026-10-09.2';
+export const POLICY_VERSION = '2026-10-10.1';
 const segmenter = new Intl.Segmenter('ar', { granularity: 'grapheme' });
 const names = {
   facebook: 'Facebook',
@@ -348,6 +348,10 @@ export function buildPlan(input: Draft, inputCaps: CapabilitySnapshot, now: ISOI
         target.assets.push({ sourceAssetId: asset.id, recipeId: recipe?.id ?? null });
         if (recipe) {
           recipes.set(recipe.id, recipe);
+          if (asset.mimeType === 'image/gif' && recipe.outputMimeType === 'image/jpeg')
+            note(channel, 'ANIMATION_FIRST_FRAME', 'الصورة المتحركة: أول إطار فقط.', {
+              sourceAssetId: asset.id,
+            });
           if (recipe.outputMimeType !== asset.mimeType)
             note(channel, 'MEDIA_CONVERTED', 'نسخة محلية بصيغة متوافقة.', {
               sourceAssetId: asset.id,

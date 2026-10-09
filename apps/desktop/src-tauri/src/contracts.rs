@@ -54,6 +54,24 @@ pub struct MediaAsset {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub derived_from: Option<String>,
 }
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SelectedFile {
+    pub file_id: String,
+    pub original_name: String,
+    pub bytes: u64,
+    pub mime_type: String,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PreparedLocalAsset {
+    pub file_id: String,
+    pub source_asset_id: String,
+    pub recipe_id: String,
+    pub mime_type: String,
+    pub bytes: u64,
+    pub sha256: String,
+}
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PlatformOverride {

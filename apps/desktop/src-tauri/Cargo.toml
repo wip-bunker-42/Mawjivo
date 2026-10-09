@@ -27,8 +27,13 @@ getrandom = "=0.4.3"
 zeroize = "=1.9.1"
 tokio = { version = "=1.53.2", features = ["sync", "fs", "io-util", "time"] }
 async-trait = "=0.1.92"
+image = { version = "=0.25.10", default-features = false, features = ["jpeg", "png", "webp", "bmp", "tiff", "gif", "pnm"] }
+fs4 = { version = "=1.1.0", default-features = false, features = ["sync"] }
+tauri-plugin-dialog = "=2.8.1"
+unicode-segmentation = "=1.13.3"
 
 [dev-dependencies]
+tempfile = "=3.27.0"
 tokio = { version = "=1.53.2", features = ["macros", "rt-multi-thread"] }
 
 [profile.release]
