@@ -1,0 +1,5 @@
+{
+  "name": "@mawjivo/service", "version": "0.1.0", "private": true, "type": "module",
+  "scripts": { "dev": "wrangler dev --local --ip 127.0.0.1 --port 8787", "build": "wrangler deploy --dry-run --outdir dist", "typecheck": "wrangler types && tsc", "test": "vitest run" },
+  "devDependencies": { "wrangler": "4.149.0", "@cloudflare/vitest-plugin": "1.4.0" }
+}

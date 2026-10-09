@@ -1,0 +1,6 @@
+{
+  "name": "@mawjivo/desktop", "version": "0.1.0", "private": true, "type": "module",
+  "scripts": { "dev": "vite --host 127.0.0.1", "build": "tsc && vite build", "typecheck": "tsc" },
+  "dependencies": { "react": "19.3.0", "react-dom": "19.3.0", "@tauri-apps/api": "2.12.2" },
+  "devDependencies": { "@types/react": "19.3.0", "@types/react-dom": "19.3.0", "@vitejs/plugin-react": "6.1.2", "vite": "8.3.4", "@tauri-apps/cli": "2.12.1" }
+}

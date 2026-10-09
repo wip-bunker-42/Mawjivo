@@ -106,12 +106,12 @@
 
 **Interfaces:** ينتج `App(): ReactElement` وWorker `fetch(Request, Env, ExecutionContext): Promise<Response>`، ومسار `/health` يعيد 503 و`state: 'unconfigured'` إلى أن يكتمل الإعداد. سكربتات الجذر: `typecheck`, `test`, `test:e2e`, `build`, `tauri:build`؛ أسماء packages: `@mawjivo/desktop`, `@mawjivo/service`؛ تنشأ `@mawjivo/core` في المهمة 2. Env يولد بواسطة Wrangler ولا يكتب يدويًا بعقد مخالف للربط.
 
-- [ ] **1. تجهيز harness فقط:** إنشاء worktree عبر مهارة using-git-worktrees من HEAD الذي يحتوي الوثيقتين، وفرع `abdo/mawjivo-app`؛ الإبقاء على ملف الأسرار المستبعد في checkout الأصل وتمرير مساره دون نسخه إلى Git. تثبيت الإصدارات المثبتة ومتطلبات MSVC/WebView2 وFFmpeg الموثوقة، وملفات إعداد الاختبارات والـlockfiles. لا يعتمد التطبيق على برامج مفقودة لدى المستخدم النهائي.
-- [ ] **2. اختبار فاشل:** `shell_has_arabic_labels_and_unconfigured_service` في `shell.spec.ts`: `await expect(page.locator('html')).toHaveAttribute('lang', 'ar')` و`toHaveAttribute('dir', 'rtl')`، و`await expect(page.getByRole('combobox', {name: 'مساحة العمل'})).toBeVisible()`، وعنوان «Mawjivo»، و`expect(health.status()).toBe(503)`.
-- [ ] **3. تشغيل الأحمر:** `pnpm test:e2e -- shell.spec.ts`؛ المتوقع فشل الدلالات/مسار الصحة، لا فشل تنزيل الاعتمادات.
-- [ ] **4. التنفيذ الأدنى:** إنشاء الهيكل والواجهة الدلالية وhealth الصادق؛ ربط `cloudflareTest({wrangler:{configPath:'./wrangler.jsonc'}})`، و`wrangler types`، وتاريخ توافق `2026-10-09`، وCSP دون تنفيذ JavaScript بعيد أو shell عام.
-- [ ] **5. تحقق أخضر:** `pnpm typecheck`، الاختبار السابق، `pnpm build`، و`pnpm tauri:build -- --no-bundle`؛ نجاح البناء المحلي وWorker dry-run، دون نشر خارجي في هذه المهمة.
-- [ ] **6. تسجيل:** إضافة الملفات المحددة وملفات القفل ثم `git commit -m "feat: bootstrap accessible Mawjivo desktop and service"`.
+- [x] **1. تجهيز harness فقط:** إنشاء worktree عبر مهارة using-git-worktrees من HEAD الذي يحتوي الوثيقتين، وفرع `abdo/mawjivo-app`؛ الإبقاء على ملف الأسرار المستبعد في checkout الأصل وتمرير مساره دون نسخه إلى Git. تثبيت الإصدارات المثبتة ومتطلبات MSVC/WebView2 وFFmpeg الموثوقة، وملفات إعداد الاختبارات والـlockfiles. لا يعتمد التطبيق على برامج مفقودة لدى المستخدم النهائي.
+- [x] **2. اختبار فاشل:** `shell_has_arabic_labels_and_unconfigured_service` في `shell.spec.ts`: `await expect(page.locator('html')).toHaveAttribute('lang', 'ar')` و`toHaveAttribute('dir', 'rtl')`، و`await expect(page.getByRole('combobox', {name: 'مساحة العمل'})).toBeVisible()`، وعنوان «Mawjivo»، و`expect(health.status()).toBe(503)`.
+- [x] **3. تشغيل الأحمر:** `pnpm test:e2e -- shell.spec.ts`؛ المتوقع فشل الدلالات/مسار الصحة، لا فشل تنزيل الاعتمادات.
+- [x] **4. التنفيذ الأدنى:** إنشاء الهيكل والواجهة الدلالية وhealth الصادق؛ ربط `cloudflareTest({wrangler:{configPath:'./wrangler.jsonc'}})`، و`wrangler types`، وتاريخ توافق `2026-10-09`، وCSP دون تنفيذ JavaScript بعيد أو shell عام.
+- [x] **5. تحقق أخضر:** `pnpm typecheck`، الاختبار السابق، `pnpm build`، و`pnpm tauri:build -- --no-bundle`؛ نجاح البناء المحلي وWorker dry-run، دون نشر خارجي في هذه المهمة.
+- [x] **6. تسجيل:** إضافة الملفات المحددة وملفات القفل ثم `git commit -m "feat: bootstrap accessible Mawjivo desktop and service"`.
 
 ### Task 2: سياسة منشور واحدة وتوقيت وأسماء ومراجعة قابلة للتطابق
 

@@ -2,3 +2,17 @@
 .env
 .env.*
 *.secrets.env
+node_modules/
+dist/
+target/
+.wrangler/
+.tools/
+test-results/
+playwright-report/
+*.log
+apps/service/worker-configuration.d.ts
+apps/desktop/src-tauri/icons/android/
+apps/desktop/src-tauri/icons/ios/
+apps/desktop/src-tauri/icons/Square*.png
+apps/desktop/src-tauri/icons/StoreLogo.png
+apps/desktop/src-tauri/gen/schemas/
