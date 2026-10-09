@@ -23,6 +23,7 @@ export interface Workspace {
   defaultPlatforms: Platform[];
   serviceProfileId: string;
 }
+export type WorkspaceInput = Pick<Workspace, 'name' | 'timeZone' | 'defaultPlatforms' | 'serviceProfileId'>;
 export interface MediaAsset {
   id: string;
   originalName: string;

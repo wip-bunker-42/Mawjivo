@@ -1,6 +1,7 @@
 /mawjivo.secrets.env
 .env
 .env.*
+.dev.vars*
 *.secrets.env
 node_modules/
 dist/

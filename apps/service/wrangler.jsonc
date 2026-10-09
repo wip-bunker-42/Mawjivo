@@ -1,5 +1,18 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "mawjivo", "main": "src/index.ts", "compatibility_date": "2026-10-09", "compatibility_flags": ["nodejs_compat"],
-  "observability": { "enabled": true, "head_sampling_rate": 0.1 }
+  "name": "mawjivo",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-09",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true, "head_sampling_rate": 0.1 },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "mawjivo-db",
+      "database_id": "00000000-0000-0000-0000-000000000001",
+      "migrations_dir": "migrations",
+    },
+  ],
+  "r2_buckets": [{ "binding": "MEDIA", "bucket_name": "mawjivo-media" }],
+  "secrets": { "required": ["SERVICE_ENCRYPTION_KEY"] },
 }
