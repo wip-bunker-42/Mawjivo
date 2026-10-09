@@ -1,0 +1,28 @@
+{
+  "id": "draft-1",
+  "workspaceId": "workspace-1",
+  "workspaceVersion": 1,
+  "timeZone": "Africa/Cairo",
+  "revision": 1,
+  "text": "وصف عربي 👩🏽‍💻",
+  "title": "عنوان الفيديو",
+  "assets": [
+    {
+      "id": "photo-1",
+      "originalName": "صورة.png",
+      "kind": "image",
+      "bytes": 12345,
+      "mimeType": "image/png",
+      "width": 1024,
+      "height": 768
+    }
+  ],
+  "selections": ["facebook", "instagram", "threads", "x", "youtube", "tiktok"],
+  "overrides": {
+    "x": { "text": "نص مخصص", "altTexts": ["وصف بديل"] },
+    "threads": { "threadParts": ["أول", "ثان"] }
+  },
+  "scheduleLocal": null,
+  "scheduleOffset": null,
+  "createdAt": "2026-10-09T10:00:00Z"
+}

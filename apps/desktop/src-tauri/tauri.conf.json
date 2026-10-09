@@ -1,10 +1,41 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Mawjivo", "version": "0.1.0", "identifier": "com.aimansour.mawjivo",
-  "build": { "beforeDevCommand": "pnpm dev", "beforeBuildCommand": "pnpm build", "devUrl": "http://127.0.0.1:1420", "frontendDist": "../dist" },
-  "app": {
-    "windows": [{ "label": "main", "title": "Mawjivo", "width": 1050, "height": 760, "minWidth": 600, "minHeight": 480 }],
-    "security": { "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src ipc: http://ipc.localhost; img-src 'self' asset: http://asset.localhost; object-src 'none'; base-uri 'self'; frame-src 'none'" }
+  "productName": "Mawjivo",
+  "version": "0.1.0",
+  "identifier": "com.aimansour.mawjivo",
+  "build": {
+    "beforeDevCommand": "pnpm dev",
+    "beforeBuildCommand": "pnpm build",
+    "devUrl": "http://127.0.0.1:1420",
+    "frontendDist": "../dist"
   },
-  "bundle": { "active": true, "targets": ["nsis"], "publisher": "Mawjivo", "shortDescription": "النشر الشخصي والجدولة", "windows": { "nsis": { "installMode": "currentUser", "languages": ["Arabic", "English"], "displayLanguageSelector": true }, "webviewInstallMode": { "type": "downloadBootstrapper" } } }
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Mawjivo",
+        "width": 1050,
+        "height": 760,
+        "minWidth": 600,
+        "minHeight": 480
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src ipc: http://ipc.localhost; img-src 'self' asset: http://asset.localhost; object-src 'none'; base-uri 'self'; frame-src 'none'"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "publisher": "Mawjivo",
+    "shortDescription": "النشر الشخصي والجدولة",
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser",
+        "languages": ["Arabic", "English"],
+        "displayLanguageSelector": true
+      },
+      "webviewInstallMode": { "type": "downloadBootstrapper" }
+    }
+  }
 }

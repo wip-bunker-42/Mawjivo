@@ -1,0 +1,22 @@
+{
+  "name": "@mawjivo/core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc",
+    "build": "tsc"
+  },
+  "dependencies": {
+    "zod": "4.6.5",
+    "twitter-text": "3.1.0",
+    "@js-temporal/polyfill": "0.5.1"
+  },
+  "devDependencies": {
+    "@types/twitter-text": "3.1.10"
+  }
+}

@@ -1,0 +1,15 @@
+import { expect, test } from 'vitest';
+import { videoFilename } from '../src/filenames';
+test('arabic_emoji_title_preserved_with_safe_filename', () => {
+  const title = 'رحلة: القاهرة / مصر 👩🏽‍💻';
+  expect(videoFilename(title, 'mp4')).toBe('رحلة القاهرة مصر 👩🏽‍💻.mp4');
+  expect(title).toBe('رحلة: القاهرة / مصر 👩🏽‍💻');
+});
+test('reserved_long_names_and_extensions_are_safe', () => {
+  expect(videoFilename('CON', 'mp4')).toBe('فيديو-CON.mp4');
+  const name = videoFilename('👩🏽‍💻'.repeat(100), '.mp4');
+  expect(name.length).toBeLessThanOrEqual(240);
+  expect(name.endsWith('👩🏽‍💻.mp4')).toBe(true);
+  expect(() => videoFilename('عنوان', '../exe')).toThrow('INVALID_EXTENSION');
+  expect(() => videoFilename('  ', 'mp4')).toThrow('VIDEO_TITLE_REQUIRED');
+});

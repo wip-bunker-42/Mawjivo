@@ -1,0 +1,19 @@
+{
+  "version": "2026-10-09.1",
+  "buffer": {
+    "x": {
+      "textMax": 280,
+      "maxImages": 4,
+      "videoMaxDurationMs": 140000,
+      "source": "https://developers.buffer.com/guides/character-limits.html"
+    },
+    "youtube": {
+      "titleMax": 100,
+      "textMax": 5000,
+      "videoMaxDurationMs": 180000,
+      "source": "https://support.buffer.com/en-us/articles/using-youtube-shorts-with-buffer-Jl8iR6jIck"
+    }
+  },
+  "capabilitiesMustBeVerified": true,
+  "threadLimitsComeFromVerifiedAccount": true
+}
