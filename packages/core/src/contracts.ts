@@ -52,6 +52,20 @@ export interface MediaAsset {
   durationMs?: number | undefined;
   derivedFrom?: string | undefined;
 }
+export type UploadManifest = Pick<
+  MediaAsset,
+  'originalName' | 'kind' | 'bytes' | 'mimeType' | 'width' | 'height' | 'durationMs'
+> & { sourceAssetId: string; recipeId: string | null };
+export interface UploadedPart {
+  partNumber: number;
+  etag: string;
+}
+export interface UploadTicket {
+  assetId: string;
+  multipartId: string | null;
+  expiresAt: string;
+  parts: { partNumber: number; url: string }[];
+}
 export interface PlatformOverride {
   text?: string | undefined;
   altTexts?: string[] | undefined;

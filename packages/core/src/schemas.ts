@@ -23,6 +23,46 @@ export const MediaAssetSchema = z.strictObject({
   durationMs: positive.optional(),
   derivedFrom: id.optional(),
 });
+export const UploadManifestSchema = MediaAssetSchema.pick({
+  originalName: true,
+  kind: true,
+  bytes: true,
+  mimeType: true,
+  width: true,
+  height: true,
+  durationMs: true,
+})
+  .extend({
+    sourceAssetId: id,
+    recipeId: recipeId.nullable(),
+    bytes: positive.max(9_000_000_000),
+    originalName: z
+      .string()
+      .min(1)
+      .max(255)
+      .refine((name) => !/[\u0000-\u001f\u007f/\\]/.test(name) && name !== '.' && name !== '..'),
+    mimeType: z.enum([
+      'image/jpeg',
+      'image/png',
+      'image/webp',
+      'image/heic',
+      'image/avif',
+      'image/jxl',
+      'image/bmp',
+      'image/tiff',
+      'image/gif',
+      'image/x-portable-anymap',
+      'video/mp4',
+      'video/quicktime',
+      'video/webm',
+      'video/x-matroska',
+      'video/x-msvideo',
+      'video/mpeg',
+      'video/x-flv',
+      'video/x-ms-asf',
+    ]),
+  })
+  .refine((input) => input.mimeType.startsWith(input.kind + '/'));
 const override = z.strictObject({
   text: z.string().max(100_000).optional(),
   altTexts: z.array(z.string().max(100_000)).optional(),

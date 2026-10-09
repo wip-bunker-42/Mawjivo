@@ -1,6 +1,17 @@
 import { authenticate } from './auth';
 import { errorResponse, ServiceError } from './errors';
 import { readControlJson } from './http';
+import { requireWorkspace } from './auth';
+import {
+  beginUpload,
+  completeUpload,
+  renewUpload,
+  abortUpload,
+  serveMedia,
+  validateUpload,
+} from './assets';
+import { ownedAsset, assetDto } from './assets/model';
+import type { UploadedPart } from '@mawjivo/core';
 import { initializeService } from './readiness';
 import {
   getCapabilities,
@@ -30,6 +41,16 @@ export default {
         );
       }
       const path = new URL(request.url).pathname;
+      const media = /^\/media\/([a-f0-9]{64})\/([^/]+)$/.exec(path);
+      if (media) {
+        let name: string;
+        try {
+          name = decodeURIComponent(media[2]!);
+        } catch {
+          throw new ServiceError('NOT_FOUND', 'الملف غير موجود.', 404);
+        }
+        return serveMedia(request, media[1]!, name, env);
+      }
       if (path.startsWith('/api/')) {
         const auth = await authenticate(request, env);
         if (path === '/api/service/initialize' && request.method === 'POST')
@@ -49,6 +70,78 @@ export default {
             ),
             { status: 201 },
           );
+        const assetPath =
+          /^\/api\/workspaces\/([A-Za-z0-9_-]{1,160})\/assets(?:\/([A-Za-z0-9_-]{1,160})(?:\/(renew|complete))?)?$/.exec(
+            path,
+          );
+        if (assetPath) {
+          const workspace = assetPath[1]!,
+            id = assetPath[2],
+            action = assetPath[3];
+          requireWorkspace(auth, workspace);
+          if (!id && request.method === 'POST')
+            return Response.json(
+              await beginUpload(
+                auth,
+                workspace,
+                validateUpload(await readControlJson(request)),
+                env,
+              ),
+              { status: 201, headers: { 'Cache-Control': 'no-store' } },
+            );
+          if (id) {
+            const row = await ownedAsset(auth, id, env);
+            if (row.workspace_id !== workspace)
+              throw new ServiceError('FORBIDDEN', 'الملف لا يخص هذه المساحة.', 403);
+            if (!action && request.method === 'GET')
+              return Response.json(
+                { state: row.state, ...(row.state === 'complete' ? { asset: assetDto(row) } : {}) },
+                { headers: { 'Cache-Control': 'no-store' } },
+              );
+            if (!action && request.method === 'DELETE') {
+              await abortUpload(auth, id, env);
+              return new Response(null, { status: 204 });
+            }
+            if (request.method === 'POST') {
+              const body = await readControlJson(request);
+              if (!body || typeof body !== 'object' || Array.isArray(body))
+                throw new ServiceError('INVALID_INPUT', 'بيانات الرفع غير صالحة.');
+              if (action === 'renew') {
+                if (Object.keys(body).some((key) => key !== 'partNumbers'))
+                  throw new ServiceError('INVALID_INPUT', 'بيانات التجديد غير صالحة.');
+                const numbers = (body as { partNumbers?: unknown }).partNumbers;
+                if (
+                  numbers !== undefined &&
+                  (!Array.isArray(numbers) || numbers.some((n) => typeof n !== 'number'))
+                )
+                  throw new ServiceError('INVALID_UPLOAD_PARTS', 'أجزاء الرفع غير صالحة.');
+                return Response.json(
+                  await renewUpload(auth, id, env, numbers as number[] | undefined),
+                  { headers: { 'Cache-Control': 'no-store' } },
+                );
+              }
+              if (action === 'complete') {
+                const complete = body as { parts?: unknown; sha256?: unknown };
+                if (
+                  Object.keys(body).some((key) => !['parts', 'sha256'].includes(key)) ||
+                  !Array.isArray(complete.parts) ||
+                  typeof complete.sha256 !== 'string'
+                )
+                  throw new ServiceError('INVALID_INPUT', 'بيانات الإكمال غير صالحة.');
+                return Response.json(
+                  await completeUpload(
+                    auth,
+                    id,
+                    complete.parts as UploadedPart[],
+                    complete.sha256,
+                    env,
+                  ),
+                  { headers: { 'Cache-Control': 'no-store' } },
+                );
+              }
+            }
+          }
+        }
         const connectionPath =
           /^\/api\/workspaces\/([A-Za-z0-9_-]{1,160})\/(connections|capabilities)$/.exec(path);
         if (connectionPath) {
