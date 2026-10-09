@@ -1,25 +1,162 @@
-:root { font-family: "Segoe UI", Tahoma, sans-serif; color: #eef2f6; background: #101418; color-scheme: dark; font-size: 17px; line-height: 1.65; }
-* { box-sizing: border-box; }
-body { margin: 0; }
-button, input, select, textarea { font: inherit; }
-button, select { min-height: 44px; border: 1px solid #63758a; border-radius: 8px; padding: .5rem 1rem; background: #1d2834; color: #eef2f6; }
-button { cursor: pointer; }
-button:hover { background: #2b3949; }
-button[aria-pressed="true"] { border-color: #eabc76; background: #44351e; }
-button:disabled, select:disabled { cursor: default; color: #b6c1ce; }
-:focus-visible { outline: 3px solid #ffcf88; outline-offset: 4px; }
-.app-shell { max-width: 1100px; margin: auto; padding: 2rem; }
-.app-header { display: flex; justify-content: space-between; gap: 2rem; align-items: center; }
-h1 { font-size: 2rem; margin: 0; }
-h2 { font-size: 1.45rem; }
-h3 { font-size: 1.2rem; margin-top: 0; }
-.subtitle { margin: .25rem 0 0; color: #b6c1ce; }
-.workspace-field { display: grid; gap: .4rem; min-width: 230px; }
-.navigation { display: flex; flex-wrap: wrap; gap: .7rem; border-bottom: 1px solid #35424e; padding-block: 1.6rem; }
-main { padding-block: 1rem; }
-.setup-notice { background: #18212a; border: 1px solid #35424e; border-radius: 12px; padding: 1.5rem; }
-.primary { background: #eabc76; color: #171a1e; border-color: #eabc76; font-weight: 600; }
-.primary:hover { background: #ffcf88; }
-.skip-link { position: absolute; inset-block-start: -100px; background: #eabc76; color: #171a1e; padding: .5rem 1rem; }
-.skip-link:focus { inset-block-start: 10px; }
-@media (max-width: 650px) { .app-shell { padding: 1rem; } .app-header { align-items: stretch; flex-direction: column; gap: 1rem; } }
+:root {
+  font-family: 'Segoe UI', Tahoma, sans-serif;
+  color: #eef2f6;
+  background: #101418;
+  color-scheme: dark;
+  font-size: 17px;
+  line-height: 1.65;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+}
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+input,
+textarea {
+  border: 1px solid #63758a;
+  border-radius: 8px;
+  min-height: 44px;
+  background: #18212a;
+  color: #eef2f6;
+  padding: 0.5rem 0.8rem;
+}
+.form-field {
+  display: grid;
+  gap: 0.35rem;
+  margin-block-end: 1rem;
+  max-width: 620px;
+}
+table {
+  border-collapse: collapse;
+  width: 100%;
+  margin-block: 1rem;
+}
+th,
+td {
+  padding: 0.7rem;
+  text-align: start;
+  border-bottom: 1px solid #35424e;
+}
+details {
+  margin-block: 1rem;
+}
+summary {
+  cursor: pointer;
+  padding-block: 0.5rem;
+}
+.operation-message {
+  padding: 0.8rem;
+  border-inline-start: 3px solid #eabc76;
+  background: #18212a;
+}
+button,
+select {
+  min-height: 44px;
+  border: 1px solid #63758a;
+  border-radius: 8px;
+  padding: 0.5rem 1rem;
+  background: #1d2834;
+  color: #eef2f6;
+}
+button {
+  cursor: pointer;
+}
+button:hover {
+  background: #2b3949;
+}
+button[aria-pressed='true'] {
+  border-color: #eabc76;
+  background: #44351e;
+}
+button:disabled,
+select:disabled {
+  cursor: default;
+  color: #b6c1ce;
+}
+:focus-visible {
+  outline: 3px solid #ffcf88;
+  outline-offset: 4px;
+}
+.app-shell {
+  max-width: 1100px;
+  margin: auto;
+  padding: 2rem;
+}
+.app-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 2rem;
+  align-items: center;
+}
+h1 {
+  font-size: 2rem;
+  margin: 0;
+}
+h2 {
+  font-size: 1.45rem;
+}
+h3 {
+  font-size: 1.2rem;
+  margin-top: 0;
+}
+.subtitle {
+  margin: 0.25rem 0 0;
+  color: #b6c1ce;
+}
+.workspace-field {
+  display: grid;
+  gap: 0.4rem;
+  min-width: 230px;
+}
+.navigation {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+  border-bottom: 1px solid #35424e;
+  padding-block: 1.6rem;
+}
+main {
+  padding-block: 1rem;
+}
+.setup-notice {
+  background: #18212a;
+  border: 1px solid #35424e;
+  border-radius: 12px;
+  padding: 1.5rem;
+}
+.primary {
+  background: #eabc76;
+  color: #171a1e;
+  border-color: #eabc76;
+  font-weight: 600;
+}
+.primary:hover {
+  background: #ffcf88;
+}
+.skip-link {
+  position: absolute;
+  inset-block-start: -100px;
+  background: #eabc76;
+  color: #171a1e;
+  padding: 0.5rem 1rem;
+}
+.skip-link:focus {
+  inset-block-start: 10px;
+}
+@media (max-width: 650px) {
+  .app-shell {
+    padding: 1rem;
+  }
+  .app-header {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 1rem;
+  }
+}

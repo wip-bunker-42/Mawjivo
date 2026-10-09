@@ -11,6 +11,8 @@
     "test": "pnpm -r --if-present test",
     "test:e2e": "playwright test",
     "build": "pnpm -r build",
+    "service:artifact": "node scripts/build-service-artifact.mjs",
+    "operator:setup": "node scripts/operator-setup.mjs",
     "tauri:build": "pnpm --dir apps/desktop exec tauri build"
   },
   "devDependencies": {

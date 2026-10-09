@@ -10,10 +10,11 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@mawjivo/core": "workspace:*"
+    "@mawjivo/core": "workspace:*",
+    "aws4fetch": "1.0.20"
   },
   "devDependencies": {
-    "wrangler": "4.149.0",
-    "@cloudflare/vitest-plugin": "1.4.0"
+    "@cloudflare/vitest-plugin": "1.4.0",
+    "wrangler": "4.149.0"
   }
 }

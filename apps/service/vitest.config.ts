@@ -6,7 +6,11 @@ export default defineConfig(async () => ({
     cloudflareTest({
       wrangler: { configPath: './wrangler.jsonc' },
       miniflare: {
-        bindings: { SERVICE_ENCRYPTION_KEY: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=' },
+        bindings: {
+          SERVICE_ENCRYPTION_KEY: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
+          R2_ACCESS_KEY_ID: 'test-access',
+          R2_SECRET_ACCESS_KEY: 'test-secret',
+        },
       },
     }),
   ],

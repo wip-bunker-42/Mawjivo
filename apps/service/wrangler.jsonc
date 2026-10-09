@@ -14,5 +14,11 @@
     },
   ],
   "r2_buckets": [{ "binding": "MEDIA", "bucket_name": "mawjivo-media" }],
-  "secrets": { "required": ["SERVICE_ENCRYPTION_KEY"] },
+  "vars": {
+    "SERVICE_ID": "local-service",
+    "SERVICE_VERSION": "0.1.0",
+    "R2_ACCOUNT_ID": "00000000000000000000000000000000",
+    "MEDIA_BUCKET": "mawjivo-media",
+  },
+  "secrets": { "required": ["SERVICE_ENCRYPTION_KEY", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY"] },
 }

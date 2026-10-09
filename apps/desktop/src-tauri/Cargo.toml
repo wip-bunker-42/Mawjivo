@@ -1,5 +1,6 @@
 [package]
 name = "mawjivo"
+default-run = "mawjivo"
 version = "0.1.0"
 description = "Accessible personal social publishing"
 edition = "2024"
@@ -16,6 +17,19 @@ tauri-build = { version = "=2.7.1", features = [] }
 tauri = { version = "=2.12.2", features = [] }
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = "=1.0.151"
+keyring = "=4.2.0"
+rusqlite = { version = "=0.40.2", features = ["bundled"] }
+reqwest = { version = "=0.13.5", default-features = false, features = ["rustls", "json", "multipart", "stream"] }
+uuid = { version = "=1.27.0", features = ["v4"] }
+sha2 = "=0.11.0"
+base64 = "=0.23.1"
+getrandom = "=0.4.3"
+zeroize = "=1.9.1"
+tokio = { version = "=1.53.2", features = ["sync", "fs", "io-util", "time"] }
+async-trait = "=0.1.92"
+
+[dev-dependencies]
+tokio = { version = "=1.53.2", features = ["macros", "rt-multi-thread"] }
 
 [profile.release]
 lto = "thin"

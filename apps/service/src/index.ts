@@ -1,6 +1,7 @@
 import { authenticate } from './auth';
 import { errorResponse, ServiceError } from './errors';
 import { readControlJson } from './http';
+import { initializeService } from './readiness';
 import {
   createWorkspace,
   getWorkspace,
@@ -12,6 +13,11 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     try {
       if (new URL(request.url).pathname === '/health') {
+        const initialized = await env.DB.prepare(
+          "SELECT value_json FROM service_settings WHERE key='initialized'",
+        ).first<{ value_json: string }>();
+        if (initialized?.value_json === 'true')
+          return Response.json({ state: 'ready' }, { headers: { 'Cache-Control': 'no-store' } });
         return Response.json(
           { state: 'unconfigured', messageAr: 'أكمل إعداد الخدمة قبل النشر.' },
           { status: 503, headers: { 'Cache-Control': 'no-store' } },
@@ -20,6 +26,10 @@ export default {
       const path = new URL(request.url).pathname;
       if (path.startsWith('/api/')) {
         const auth = await authenticate(request, env);
+        if (path === '/api/service/initialize' && request.method === 'POST')
+          return Response.json(await initializeService(auth, env), {
+            headers: { 'Cache-Control': 'no-store' },
+          });
         if (path === '/api/workspaces' && request.method === 'GET')
           return Response.json(await listWorkspaces(auth, env), {
             headers: { 'Cache-Control': 'no-store' },
