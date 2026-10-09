@@ -1,0 +1,4 @@
+/mawjivo.secrets.env
+.env
+.env.*
+*.secrets.env
