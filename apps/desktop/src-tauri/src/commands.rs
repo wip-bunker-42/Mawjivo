@@ -91,7 +91,8 @@ pub fn allowed_service_request(method: &str, path: &str) -> bool {
     }
     match parts.as_slice() {
         [_workspace] => ["GET", "PATCH"].contains(&method),
-        [_workspace, "capabilities" | "summary"] => method == "GET",
+        [_workspace, "capabilities"] => ["GET", "POST"].contains(&method),
+        [_workspace, "summary"] => method == "GET",
         [_workspace, "connections"] => ["GET", "POST"].contains(&method),
         [_workspace, "connections", _connection] => ["PATCH", "DELETE"].contains(&method),
         [_workspace, "posts"] => ["GET", "POST"].contains(&method),
@@ -199,6 +200,17 @@ mod tests {
         assert!(!allowed_service_request(
             "GET",
             "/api/workspaces/id/secrets"
+        ));
+    }
+    #[test]
+    fn manual_capabilities_refresh_is_an_explicit_scoped_post() {
+        assert!(allowed_service_request(
+            "POST",
+            "/api/workspaces/space-1/capabilities"
+        ));
+        assert!(!allowed_service_request(
+            "POST",
+            "/api/workspaces/space-1/summary"
         ));
     }
 }

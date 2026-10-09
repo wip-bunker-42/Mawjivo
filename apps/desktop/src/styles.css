@@ -122,6 +122,27 @@ h3 {
   border-bottom: 1px solid #35424e;
   padding-block: 1.6rem;
 }
+.settings-navigation {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+  margin-block-end: 1.5rem;
+}
+fieldset {
+  border: 1px solid #63758a;
+  border-radius: 8px;
+  margin-block: 1rem;
+  padding: 1rem;
+}
+.platform-setting {
+  padding-block: 0.5rem;
+}
+input[type='checkbox'] {
+  min-height: 1rem;
+  inline-size: 1.2rem;
+  block-size: 1.2rem;
+  margin-inline-end: 0.5rem;
+}
 main {
   padding-block: 1rem;
 }

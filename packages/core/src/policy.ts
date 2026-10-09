@@ -4,6 +4,7 @@ import { resolveSchedule } from './time';
 import type {
   CapabilitySnapshot,
   Channel,
+  ChannelLimits,
   Draft,
   ISOInstant,
   MediaAsset,
@@ -12,7 +13,7 @@ import type {
   PostPlan,
   TargetPlan,
 } from './contracts';
-export const POLICY_VERSION = '2026-10-09.1';
+export const POLICY_VERSION = '2026-10-09.2';
 const segmenter = new Intl.Segmenter('ar', { granularity: 'grapheme' });
 const names = {
   facebook: 'Facebook',
@@ -22,14 +23,18 @@ const names = {
   youtube: 'YouTube',
   tiktok: 'TikTok',
 };
-function length(text: string, weighted: boolean): number {
-  return weighted ? twitterText.parseTweet(text).weightedLength : [...text].length;
+type TextMetric = ChannelLimits['textMetric'];
+function length(text: string, metric: TextMetric): number {
+  if (metric === 'weightedX') return twitterText.parseTweet(text).weightedLength;
+  if (metric === 'utf16Instagram') return text.length + (text.match(/\n/g)?.length ?? 0);
+  return metric === 'utf16' ? text.length : [...text].length;
 }
-function truncate(text: string, maximum: number, weighted = false): string {
-  if (length(text, weighted) <= maximum) return text;
-  const urls = weighted
-    ? new Map(twitterText.extractUrlsWithIndices(text).map((url) => [url.indices[0], url]))
-    : new Map();
+function truncate(text: string, maximum: number, metric: TextMetric = 'codePoints'): string {
+  if (length(text, metric) <= maximum) return text;
+  const urls =
+    metric === 'weightedX'
+      ? new Map(twitterText.extractUrlsWithIndices(text).map((url) => [url.indices[0], url]))
+      : new Map();
   let result = '',
     used = 0,
     skipUntil = 0;
@@ -37,7 +42,7 @@ function truncate(text: string, maximum: number, weighted = false): string {
     if (part.index < skipUntil) continue;
     const url = urls.get(part.index);
     const token: string = url ? url.url : part.segment;
-    const weight = url ? 23 : length(token, weighted);
+    const weight = url ? 23 : length(token, metric);
     if (used + weight > maximum) break;
     result += token;
     used += weight;
@@ -61,7 +66,18 @@ function makeRecipe(asset: MediaAsset, limits: MediaLimits): MediaRecipe | null 
     asset.width !== undefined &&
     ((limits.maxWidth !== undefined && asset.width > limits.maxWidth) ||
       (limits.minWidth !== undefined && asset.width < limits.minWidth));
-  if (mimeMatches && !durationTooLong && !badRatio && !badWidth && asset.bytes <= limits.maxBytes)
+  const badHeight =
+    asset.height !== undefined &&
+    ((limits.maxHeight !== undefined && asset.height > limits.maxHeight) ||
+      (limits.minHeight !== undefined && asset.height < limits.minHeight));
+  if (
+    mimeMatches &&
+    !durationTooLong &&
+    !badRatio &&
+    !badWidth &&
+    !badHeight &&
+    asset.bytes <= limits.maxBytes
+  )
     return null;
   const outputMimeType = mimeMatches
     ? asset.mimeType
@@ -75,19 +91,69 @@ function makeRecipe(asset: MediaAsset, limits: MediaLimits): MediaRecipe | null 
     outputMimeType,
     maxBytes: limits.maxBytes,
     ...(durationTooLong ? { maxDurationMs: limits.maxDurationMs } : {}),
-    ...(badRatio || badWidth
+    ...(badRatio || badWidth || badHeight
       ? {
           frameMode: 'pad' as const,
           ...(limits.minAspectRatio !== undefined ? { minAspectRatio: limits.minAspectRatio } : {}),
           ...(limits.maxAspectRatio !== undefined ? { maxAspectRatio: limits.maxAspectRatio } : {}),
           ...(limits.maxWidth !== undefined ? { maxWidth: limits.maxWidth } : {}),
           ...(limits.minWidth !== undefined ? { minWidth: limits.minWidth } : {}),
+          ...(limits.minHeight !== undefined ? { minHeight: limits.minHeight } : {}),
+          ...(limits.maxHeight !== undefined ? { maxHeight: limits.maxHeight } : {}),
         }
       : {}),
     ...(asset.kind === 'image' && outputMimeType === 'image/jpeg' ? { quality: 95 } : {}),
   };
   // Stable reversible identifier: equal recipes share the same local processing/upload job.
   return { ...body, id: 'recipe:' + JSON.stringify(body) };
+}
+function restrictedPrefix(
+  text: string,
+  limits: ChannelLimits,
+): { text: string; limit?: number; reason?: string } {
+  const urls = twitterText.extractUrlsWithIndices(text);
+  // The official twitter-text TLD list is older than valid custom/new domains.
+  for (const match of text.matchAll(/https?:\/\/[^\s<>"']+/gu)) {
+    try {
+      new URL(match[0]);
+      if (!urls.some((url) => match.index >= url.indices[0] && match.index < url.indices[1]))
+        urls.push({ url: match[0], indices: [match.index, match.index + match[0].length] });
+    } catch {
+      /* not a valid URL */
+    }
+  }
+  urls.sort((a, b) => a.indices[0] - b.indices[0]);
+  const outsideUrl = (index: number) =>
+    !urls.some((url) => index >= url.indices[0] && index < url.indices[1]);
+  const groups = [
+    {
+      maximum: limits.maxHashtags,
+      reason: 'الوسوم',
+      items: twitterText
+        .extractHashtagsWithIndices(text)
+        .filter((item) => outsideUrl(item.indices[0])),
+    },
+    {
+      maximum: limits.maxMentions,
+      reason: 'الإشارات',
+      items: twitterText
+        .extractMentionsWithIndices(text)
+        .filter((item) => outsideUrl(item.indices[0])),
+    },
+    { maximum: limits.maxUrls, reason: 'الروابط', items: urls },
+  ];
+  const cuts = groups
+    .filter((group) => group.maximum !== undefined && group.items.length > group.maximum)
+    .map((group) => ({
+      at: group.items[group.maximum!]!.indices[0],
+      limit: group.maximum!,
+      reason: group.reason,
+    }))
+    .sort((a, b) => a.at - b.at);
+  const cut = cuts[0];
+  return cut
+    ? { text: text.slice(0, cut.at).trimEnd(), limit: cut.limit, reason: cut.reason }
+    : { text };
 }
 export function buildPlan(input: Draft, inputCaps: CapabilitySnapshot, now: ISOInstant): PostPlan {
   const draft = DraftSchema.parse(input),
@@ -168,14 +234,15 @@ export function buildPlan(input: Draft, inputCaps: CapabilitySnapshot, now: ISOI
       continue;
     }
     const override = draft.overrides[channel.platform];
-    const raw = override?.text ?? draft.text,
-      weighted = channel.limits.textMetric === 'weightedX';
+    const raw = override?.threadParts?.[0] ?? override?.text ?? draft.text,
+      metric = channel.limits.textMetric,
+      textMax = channel.limits.textMaxByKind?.[kind] ?? channel.limits.textMax;
     const target: TargetPlan = {
       channelId: channel.id,
       connectionId: channel.connectionId,
       platform: channel.platform,
       provider: channel.provider,
-      text: truncate(raw, channel.limits.textMax, weighted),
+      text: truncate(raw, textMax, metric),
       threadParts: [],
       assets: [],
       altTexts: [],
@@ -184,7 +251,11 @@ export function buildPlan(input: Draft, inputCaps: CapabilitySnapshot, now: ISOI
       target.title =
         channel.limits.titleMax === undefined
           ? draft.title
-          : truncate(draft.title, channel.limits.titleMax);
+          : truncate(
+              draft.title,
+              channel.limits.titleMax,
+              metric === 'weightedX' ? 'utf16' : metric,
+            );
     if (target.title !== undefined && target.title !== draft.title)
       note(channel, 'TITLE_TRUNCATED', 'قُص العنوان ليناسب الحد.', {
         original: [...draft.title].length,
@@ -194,11 +265,11 @@ export function buildPlan(input: Draft, inputCaps: CapabilitySnapshot, now: ISOI
       note(
         channel,
         'TEXT_TRUNCATED',
-        `أول ${length(target.text, weighted)} من ${length(raw, weighted)} حرف.`,
+        `أول ${length(target.text, metric)} من ${length(raw, metric)} حرف.`,
         {
-          original: length(raw, weighted),
-          sent: length(target.text, weighted),
-          limit: channel.limits.textMax,
+          original: length(raw, metric),
+          sent: length(target.text, metric),
+          limit: textMax,
         },
       );
     const parts = override?.threadParts;
@@ -210,7 +281,7 @@ export function buildPlan(input: Draft, inputCaps: CapabilitySnapshot, now: ISOI
       if (parts.some((p) => !p.trim())) throw new Error('EMPTY_THREAD_PART');
       target.threadParts = parts
         .slice(0, channel.limits.threadParts)
-        .map((part) => truncate(part, channel.limits.textMax, weighted));
+        .map((part) => truncate(part, textMax, metric));
       target.text = target.threadParts[0]!;
       if (parts.length > target.threadParts.length)
         note(
@@ -227,6 +298,21 @@ export function buildPlan(input: Draft, inputCaps: CapabilitySnapshot, now: ISOI
           });
       });
     }
+    let restriction: { limit?: number; reason?: string } | undefined;
+    const restrict = (value: string) => {
+      const result = restrictedPrefix(value, channel.limits);
+      if (result.reason) restriction = result;
+      return result.text;
+    };
+    target.text = restrict(target.text);
+    target.threadParts = target.threadParts.map(restrict);
+    if (restriction)
+      note(
+        channel,
+        'CAPTION_PREFIX_LIMIT',
+        `قُص النص عند الحد الزائد من ${restriction.reason}؛ الحد ${restriction.limit}.`,
+        { limit: restriction.limit!, reason: restriction.reason! },
+      );
     const limits =
       kind === 'image' ? channel.limits.image : kind === 'video' ? channel.limits.video : undefined;
     if (kind !== 'text' && !limits) {
@@ -285,9 +371,14 @@ export function buildPlan(input: Draft, inputCaps: CapabilitySnapshot, now: ISOI
               maxBytes: recipe.maxBytes,
             });
         }
-        if (channel.limits.altMax !== undefined) {
+        if (
+          channel.limits.altMax !== undefined &&
+          (channel.limits.altKinds === undefined || channel.limits.altKinds.includes(asset.kind))
+        ) {
           const alt = override?.altTexts?.[index] ?? raw;
-          target.altTexts.push(truncate(alt, channel.limits.altMax));
+          target.altTexts.push(
+            truncate(alt, channel.limits.altMax, metric === 'weightedX' ? 'utf16' : metric),
+          );
           if (target.altTexts[index] !== alt)
             note(channel, 'ALT_TRUNCATED', 'قُص النص البديل ليناسب الحد.', {
               sourceAssetId: asset.id,

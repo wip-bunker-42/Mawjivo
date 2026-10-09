@@ -187,6 +187,9 @@ importers:
 
   apps/desktop:
     dependencies:
+      '@mawjivo/core':
+        specifier: workspace:*
+        version: link:../../packages/core
       '@tauri-apps/api':
         specifier: 2.12.2
         version: 2.12.2

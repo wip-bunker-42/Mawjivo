@@ -32,6 +32,8 @@ pub struct Workspace {
     pub version: u64,
     pub default_platforms: Vec<Platform>,
     pub service_profile_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub preferred_channels: Option<BTreeMap<Platform, String>>,
 }
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -99,6 +101,10 @@ pub struct MediaRecipe {
     pub min_width: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub max_width: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub min_height: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_height: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub min_aspect_ratio: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]

@@ -22,8 +22,24 @@ export interface Workspace {
   version: number;
   defaultPlatforms: Platform[];
   serviceProfileId: string;
+  preferredChannels?: Partial<Record<Platform, string>> | undefined;
 }
-export type WorkspaceInput = Pick<Workspace, 'name' | 'timeZone' | 'defaultPlatforms' | 'serviceProfileId'>;
+export type WorkspaceInput = Pick<
+  Workspace,
+  'name' | 'timeZone' | 'defaultPlatforms' | 'serviceProfileId' | 'preferredChannels'
+>;
+export interface ConnectionInput {
+  provider: Provider;
+  label: string;
+  credentials: Record<string, string>;
+}
+export interface ConnectionSummary {
+  id: string;
+  provider: Provider;
+  label: string;
+  version: number;
+  readiness?: ReadinessItem[] | undefined;
+}
 export interface MediaAsset {
   id: string;
   originalName: string;
@@ -64,6 +80,8 @@ export interface MediaLimits {
   maxDurationMs?: number | undefined;
   minWidth?: number | undefined;
   maxWidth?: number | undefined;
+  minHeight?: number | undefined;
+  maxHeight?: number | undefined;
   minAspectRatio?: number | undefined;
   maxAspectRatio?: number | undefined;
 }
@@ -71,11 +89,17 @@ export interface ChannelLimits {
   supportedKinds: ContentKind[];
   textMax: number;
   titleMax?: number | undefined;
-  textMetric: 'codePoints' | 'weightedX';
+  textMetric: 'codePoints' | 'weightedX' | 'utf16' | 'utf16Instagram';
+  textMaxByKind?: Partial<Record<ContentKind, number>> | undefined;
+  maxHashtags?: number | undefined;
+  maxMentions?: number | undefined;
+  maxUrls?: number | undefined;
   image?: MediaLimits | undefined;
   video?: MediaLimits | undefined;
   altMax?: number | undefined;
+  altKinds?: MediaKind[] | undefined;
   threadParts?: number | undefined;
+  scheduledThreadsPerChannel?: number | undefined;
   source: string;
   verifiedAt: ISOInstant;
 }
@@ -85,6 +109,9 @@ export interface Channel {
   platform: Platform;
   provider: Provider;
   ready: boolean;
+  displayName?: string | undefined;
+  remoteId?: string | undefined;
+  readinessMessageAr?: string | undefined;
   limits: ChannelLimits;
 }
 export interface CapabilitySnapshot {
@@ -104,6 +131,8 @@ export interface MediaRecipe {
   maxBytes?: number | undefined;
   minWidth?: number | undefined;
   maxWidth?: number | undefined;
+  minHeight?: number | undefined;
+  maxHeight?: number | undefined;
   minAspectRatio?: number | undefined;
   maxAspectRatio?: number | undefined;
   frameMode?: 'pad' | undefined;

@@ -3,6 +3,12 @@ import { errorResponse, ServiceError } from './errors';
 import { readControlJson } from './http';
 import { initializeService } from './readiness';
 import {
+  getCapabilities,
+  listConnections,
+  saveConnections,
+  validateConnectionInputs,
+} from './connections';
+import {
   createWorkspace,
   getWorkspace,
   listWorkspaces,
@@ -43,6 +49,33 @@ export default {
             ),
             { status: 201 },
           );
+        const connectionPath =
+          /^\/api\/workspaces\/([A-Za-z0-9_-]{1,160})\/(connections|capabilities)$/.exec(path);
+        if (connectionPath) {
+          const workspaceId = connectionPath[1]!,
+            resource = connectionPath[2];
+          if (resource === 'connections' && request.method === 'GET')
+            return Response.json(await listConnections(auth, workspaceId, env), {
+              headers: { 'Cache-Control': 'no-store' },
+            });
+          if (resource === 'connections' && request.method === 'POST')
+            return Response.json(
+              await saveConnections(
+                auth,
+                workspaceId,
+                validateConnectionInputs(await readControlJson(request)),
+                env,
+              ),
+            );
+          if (resource === 'capabilities' && request.method === 'GET')
+            return Response.json(await getCapabilities(auth, workspaceId, env), {
+              headers: { 'Cache-Control': 'no-store' },
+            });
+          if (resource === 'capabilities' && request.method === 'POST')
+            return Response.json(await getCapabilities(auth, workspaceId, env, true), {
+              headers: { 'Cache-Control': 'no-store' },
+            });
+        }
         const workspace = /^\/api\/workspaces\/([^/]+)$/.exec(path);
         if (workspace) {
           const id = decodeURIComponent(workspace[1]!);
