@@ -89,7 +89,7 @@ impl LocalStore {
             PRAGMA user_version=1;").map_err(storage_error)?;
         Ok(Self { db: Mutex::new(db) })
     }
-    fn lock(&self) -> Result<MutexGuard<'_, Connection>, AppError> {
+    pub(crate) fn lock(&self) -> Result<MutexGuard<'_, Connection>, AppError> {
         self.db.lock().map_err(storage_error)
     }
     pub fn save_state(&self, state: &ProvisionState) -> Result<(), AppError> {

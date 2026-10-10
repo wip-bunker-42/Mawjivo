@@ -49,6 +49,12 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           pnpm.cmd --filter @mawjivo/desktop build
           exit $LASTEXITCODE
+      - name: Format native sources
+        shell: pwsh
+        run: |
+          cargo fmt --manifest-path apps/desktop/src-tauri/Cargo.toml
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git diff --output=rustfmt.patch
       - name: Upload regressions
         shell: pwsh
         run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --locked --test upload
@@ -60,3 +66,10 @@ jobs:
             ~/.cargo/registry
             apps/desktop/src-tauri/target
           key: mawjivo-windows-rust-1.99-${{ hashFiles('apps/desktop/src-tauri/Cargo.lock') }}
+      - name: Return formatting changes
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: native-formatting
+          path: rustfmt.patch
+          retention-days: 2
