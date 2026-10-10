@@ -6,7 +6,7 @@ use std::{collections::BTreeMap, io::{Read, Write}, net::{TcpListener, TcpStream
 struct ServerState {
     parts: BTreeMap<u32, Vec<u8>>, sends: BTreeMap<u32, u32>, fail_part: Option<u32>,
     complete_calls: u32, publish_calls: u32, aborted: bool, completed: bool, final_hash: String,
-    total_sent: usize, active: usize, peak: usize, source_change: Option<std::path::PathBuf>,
+    total_sent: usize, active: usize, peak: usize, source_change: Option<std::path::PathBuf>, foreign_url: bool, lose_completion_reply: bool,
 }
 struct Server { origin: String, state: Arc<Mutex<ServerState>>, stop: Arc<AtomicBool>, thread: Option<thread::JoinHandle<()>> }
 impl Server {
@@ -45,6 +45,8 @@ fn handle(mut stream: TcpStream, origin: &str, state: &Mutex<ServerState>) {
     let first = headers.lines().next().unwrap();
     let mut words = first.split_whitespace(); let method = words.next().unwrap(); let path = words.next().unwrap();
     let size: usize = headers.lines().find_map(|line| line.to_lowercase().strip_prefix("content-length:").map(|v| v.trim().parse().unwrap())).unwrap_or(0);
+    let is_part = method == "PUT" && path.starts_with("/r2/part/");
+    if is_part { let mut s = state.lock().unwrap(); s.active += 1; s.peak = s.peak.max(s.active); }
     while bytes.len() - boundary < size {
         let mut chunk = vec![0u8; 65536]; let n = stream.read(&mut chunk).unwrap();
         if n == 0 { return; } bytes.extend_from_slice(&chunk[..n]);
@@ -55,7 +57,7 @@ fn handle(mut stream: TcpStream, origin: &str, state: &Mutex<ServerState>) {
     if method == "PUT" && path.starts_with("/r2/part/") {
         assert!(!headers.to_lowercase().contains("authorization:"));
         let n: u32 = path.trim_start_matches("/r2/part/").parse().unwrap();
-        s.active += 1; s.peak = s.peak.max(s.active); s.total_sent += size; *s.sends.entry(n).or_default() += 1;
+        s.total_sent += size; *s.sends.entry(n).or_default() += 1;
         if s.fail_part == Some(n) { code = 503; value = json!({"error":"temporary"}); }
         else { s.parts.insert(n, body.to_vec()); extra = format!("ETag: \"opaque-etag-{n}\"\r\n"); }
         s.active -= 1;
@@ -65,11 +67,12 @@ fn handle(mut stream: TcpStream, origin: &str, state: &Mutex<ServerState>) {
         if path == "/api/workspaces/space/assets" || path.ends_with("/renew") {
             let v: Value = serde_json::from_slice(body).unwrap();
             let count = if path.ends_with("/renew") { v["partNumbers"].as_array().unwrap().iter().map(|n| n.as_u64().unwrap() as u32).collect::<Vec<_>>() } else { (1..=((v["bytes"].as_u64().unwrap() + 16_777_215) / 16_777_216) as u32).collect() };
-            value = json!({"assetId":"remote-asset", "multipartId":if s.completed {Value::Null} else {json!("multipart-1")}, "expiresAt":"2099-01-01T00:00:00Z", "parts":if s.completed {vec![]} else {count.into_iter().take(16).map(|n| json!({"partNumber":n,"url":format!("{origin}/r2/part/{n}")})).collect::<Vec<_>>()} });
+            value = json!({"assetId":"remote-asset", "multipartId":if s.completed {Value::Null} else {json!("multipart-1")}, "expiresAt":"2099-01-01T00:00:00Z", "parts":if s.completed {vec![]} else {count.into_iter().take(16).map(|n| json!({"partNumber":n,"url":if s.foreign_url {"https://foreign.invalid/r2/part/1".into()} else {format!("{origin}/r2/part/{n}")}})).collect::<Vec<_>>()} });
         } else if path.ends_with("/complete") {
             s.complete_calls += 1;
             let v: Value = serde_json::from_slice(body).unwrap(); s.final_hash = v["sha256"].as_str().unwrap().into(); s.completed = true;
             value = json!({"id":"remote-asset","originalName":"العربية.mp4","kind":"video","bytes":s.parts.values().map(Vec::len).sum::<usize>(),"mimeType":"video/mp4","sha256":s.final_hash});
+            if s.lose_completion_reply { s.lose_completion_reply = false; code = 503; value = json!({"error":"reply lost after completion"}); }
         } else if method == "GET" && path.ends_with("/remote-asset") {
             value = json!({"state":if s.completed {"complete"} else {"uploading"},"asset":if s.completed {json!({"id":"remote-asset","originalName":"العربية.mp4","kind":"video","bytes":s.parts.values().map(Vec::len).sum::<usize>(),"mimeType":"video/mp4","sha256":s.final_hash})} else {Value::Null}});
         } else if method == "DELETE" && path.ends_with("/remote-asset") { s.aborted = true; s.parts.clear(); code = 204; }
@@ -136,4 +139,26 @@ fn upload_jobs_are_scoped_to_window_profile_and_workspace() {
     assert_eq!(e.prepared("other-window", &id).unwrap_err().code, "UPLOAD_SCOPE");
     assert_eq!(e.sessions("main", "other-profile", "space").unwrap().len(), 0);
     assert_eq!(e.sessions("main", "profile", "other-space").unwrap().len(), 0);
+}
+#[tokio::test]
+async fn lost_completion_reply_is_reconciled_without_uploading_again() {
+    let t = tempfile::tempdir().unwrap(); let file = t.path().join("v.mp4"); let e = engine(&t.path().join("db")); let s = Server::new();
+    let id = e.start("main", fixture(&file, 90000), &file).unwrap(); s.state.lock().unwrap().lose_completion_reply = true;
+    assert!(run(&e, &id, &s).await.unwrap_err().retryable); let before = s.state.lock().unwrap().total_sent;
+    run(&e, &id, &s).await.unwrap(); assert!(e.prepared("main", &id).unwrap().is_some()); let state = s.state.lock().unwrap();
+    assert_eq!(state.total_sent, before); assert_eq!(state.complete_calls, 1);
+}
+#[tokio::test]
+async fn foreign_upload_url_never_receives_source_or_device_token() {
+    let t = tempfile::tempdir().unwrap(); let file = t.path().join("v.mp4"); let e = engine(&t.path().join("db")); let s = Server::new();
+    let id = e.start("main", fixture(&file, 90000), &file).unwrap(); s.state.lock().unwrap().foreign_url = true;
+    assert_eq!(run(&e, &id, &s).await.unwrap_err().code, "INVALID_UPLOAD_URL"); assert_eq!(s.state.lock().unwrap().total_sent, 0);
+}
+#[test]
+fn upload_manifest_cannot_lie_about_source_identity_or_size() {
+    let t = tempfile::tempdir().unwrap(); let file = t.path().join("v.mp4"); let e = engine(&t.path().join("db")); let input = fixture(&file, 9);
+    let mut changed = input.clone(); changed.manifest.bytes += 1;
+    assert_eq!(e.start("main", changed, &file).unwrap_err().code, "INVALID_UPLOAD_MANIFEST");
+    let mut changed = input; changed.manifest.source_asset_id = "foreign".into();
+    assert_eq!(e.start("main", changed, &file).unwrap_err().code, "INVALID_UPLOAD_MANIFEST");
 }

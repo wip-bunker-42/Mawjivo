@@ -27,6 +27,15 @@ jobs:
           rustup toolchain install 1.99.0 --profile minimal --component rustfmt,clippy
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           rustup default 1.99.0
+      - name: Restore native dependencies
+        id: native-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            apps/desktop/src-tauri/target
+          key: mawjivo-windows-rust-1.99-${{ hashFiles('apps/desktop/src-tauri/Cargo.lock') }}
+          restore-keys: mawjivo-windows-rust-1.99-
       - name: Install locked dependencies and service artifact
         shell: pwsh
         run: |
@@ -34,8 +43,18 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           pnpm service:artifact
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          pnpm media:tools
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           pnpm --filter @mawjivo/desktop build
           exit $LASTEXITCODE
       - name: Upload regressions
         shell: pwsh
         run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --locked --test upload
+      - name: Save native dependencies
+        if: always() && steps.native-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            apps/desktop/src-tauri/target
+          key: mawjivo-windows-rust-1.99-${{ hashFiles('apps/desktop/src-tauri/Cargo.lock') }}
