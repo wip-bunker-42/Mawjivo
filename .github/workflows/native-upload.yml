@@ -39,6 +39,7 @@ jobs:
           key: mawjivo-windows-rust-1.99-${{ hashFiles('apps/desktop/src-tauri/Cargo.lock') }}
           restore-keys: mawjivo-windows-rust-1.99-
       - name: Install locked dependencies and service artifact
+        id: artifact-setup
         shell: pwsh
         run: |
           pnpm.cmd install --frozen-lockfile
@@ -57,7 +58,11 @@ jobs:
           git diff --output=rustfmt.patch
       - name: Upload regressions
         shell: pwsh
-        run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --locked --test upload
+        run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --locked --test upload -- --nocapture
+      - name: Native file binding regressions
+        if: always() && steps.artifact-setup.outcome == 'success'
+        shell: pwsh
+        run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --locked --test upload_binding -- --nocapture
       - name: Save native dependencies
         if: always() && steps.native-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0

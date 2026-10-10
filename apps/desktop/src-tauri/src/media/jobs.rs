@@ -26,6 +26,9 @@ pub struct MediaRegistry {
     files: Mutex<HashMap<String, LocalFile>>,
 }
 impl MediaRegistry {
+    pub fn register_probed(&self, _window: &str, _path: &Path, _info: super::MediaInfo) -> Result<String, AppError> { Err(AppError::new("NOT_IMPLEMENTED", "ربط الرفع لم ينفذ بعد.")) }
+    pub fn register_prepared(&self, _window: &str, _path: &Path, _source: &str, _recipe: &str, _info: super::MediaInfo) -> Result<String, AppError> { Err(AppError::new("NOT_IMPLEMENTED", "ربط الرفع لم ينفذ بعد.")) }
+    pub fn upload_for(&self, _window: &str, _input: &crate::contracts::UploadInput) -> Result<(PathBuf, crate::contracts::UploadManifest), AppError> { Err(AppError::new("NOT_IMPLEMENTED", "ربط الرفع لم ينفذ بعد.")) }
     pub fn register(&self, window: &str, path: &Path) -> Result<String, AppError> {
         let path = path
             .canonicalize()

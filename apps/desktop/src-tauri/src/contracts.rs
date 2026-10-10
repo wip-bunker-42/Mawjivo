@@ -100,14 +100,23 @@ pub struct UploadInput {
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct UploadedPart { pub part_number: u32, pub etag: String }
+pub struct UploadedPart {
+    pub part_number: u32,
+    pub etag: String,
+}
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct SignedPart { pub part_number: u32, pub url: String }
+pub struct SignedPart {
+    pub part_number: u32,
+    pub url: String,
+}
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct UploadTicket {
-    pub asset_id: String, pub multipart_id: Option<String>, pub expires_at: String, pub parts: Vec<SignedPart>,
+    pub asset_id: String,
+    pub multipart_id: Option<String>,
+    pub expires_at: String,
+    pub parts: Vec<SignedPart>,
 }
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
