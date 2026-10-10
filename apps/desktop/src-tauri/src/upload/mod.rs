@@ -100,6 +100,12 @@ fn checked_input(input: &UploadInput, bytes: u64) -> Result<(), AppError> {
     Ok(())
 }
 impl UploadEngine {
+    pub fn restore_handles(&self, _owner: &str, _profile: &str, _workspace: &str, _sources: &[String], _registry: &crate::media::jobs::MediaRegistry) -> Result<Vec<UploadJob>, AppError> {
+        Err(internal())
+    }
+    pub fn revalidate(&self, _owner: &str, _id: &str) -> Result<String, AppError> {
+        Err(internal())
+    }
     pub fn new(store: Arc<UploadStore>) -> Self {
         Self {
             store,

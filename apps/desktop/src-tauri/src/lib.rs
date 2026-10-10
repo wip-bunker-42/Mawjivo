@@ -8,6 +8,7 @@ pub mod profiles;
 pub mod service_artifact;
 pub mod upload;
 pub mod vault;
+pub mod windows;
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())

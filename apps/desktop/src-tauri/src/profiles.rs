@@ -73,6 +73,9 @@ fn storage_error(_: impl std::fmt::Debug) -> AppError {
     )
 }
 impl LocalStore {
+    pub fn window_draft(&self, _profile: &str, _window: &str, _workspace: &str) -> Result<Option<crate::contracts::Draft>, AppError> {
+        Ok(None)
+    }
     pub fn memory() -> Result<Self, AppError> {
         Self::initialize(Connection::open_in_memory().map_err(storage_error)?)
     }
