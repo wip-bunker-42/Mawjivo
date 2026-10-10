@@ -1,6 +1,12 @@
 import type { Channel, ChannelLimits, Platform } from '@mawjivo/core';
-import type { DecryptedConnection, ProviderAdapter } from './types';
-import { providerJson } from './http';
+import type {
+  DecryptedConnection,
+  ProviderAdapter,
+  ProviderResult,
+  ProviderReceipt,
+  ResolvedTarget,
+} from './types';
+
 import { ServiceError } from '../errors';
 import { channelIdentity, readinessFor } from './types';
 interface Organization {
@@ -26,20 +32,40 @@ export const BUFFER_ORGANIZATIONS_QUERY =
 export async function bufferQuery<T>(
   connection: DecryptedConnection,
   query: string,
-  variables: Record<string, unknown> = {},
+  variables: Record<string, unknown>,
+  env: Env,
 ): Promise<T> {
-  const response = await providerJson<{ data?: T; errors?: unknown[] }>(
-    'https://api.buffer.com',
-    connection.credentials.apiKey!,
-    { query, variables },
-  );
-  if (!response.data || response.errors?.length)
+  const reply = await exchange<T>(connection, query, variables, 'discovery', env);
+  if (reply.kind === 'deferred')
+    throw new ServiceError(
+      'PROVIDER_RATE_LIMIT',
+      'وصل الحساب إلى حد الطلبات. أعد الفحص لاحقًا.',
+      429,
+      true,
+    );
+  if (reply.kind === 'uncertain')
+    throw new ServiceError(
+      'PROVIDER_NETWORK',
+      'تعذر فحص الحساب. تحقق من الاتصال ثم أعد الفحص.',
+      502,
+      true,
+    );
+  if (!reply.response.ok)
+    throw new ServiceError(
+      reply.response.status === 429 ? 'PROVIDER_RATE_LIMIT' : 'PROVIDER_AUTH',
+      reply.response.status === 429
+        ? 'وصل الحساب إلى حد الطلبات. أعد الفحص لاحقًا.'
+        : 'تعذر التحقق من الرمز وصلاحياته. أعد ربط الحساب.',
+      reply.response.status === 429 ? 429 : 400,
+      reply.response.status === 429,
+    );
+  if (!reply.body?.data || reply.body.errors?.length)
     throw new ServiceError(
       'BUFFER_PERMISSIONS',
       'تعذر قراءة قنوات Buffer. تحقق من صلاحيات المفتاح.',
       400,
     );
-  return response.data;
+  return reply.body.data;
 }
 const sources = {
   x: 'https://support.buffer.com/articles/using-xtwitter-with-buffer-nA84XnWtuU',
@@ -209,10 +235,12 @@ function platformFor(service: string): Platform | null {
     )[service] ?? null
   );
 }
-async function discover(connection: DecryptedConnection, _env: Env): Promise<Channel[]> {
+async function discover(connection: DecryptedConnection, env: Env): Promise<Channel[]> {
   const { account } = await bufferQuery<{ account: { organizations: Organization[] } }>(
     connection,
     BUFFER_ORGANIZATIONS_QUERY,
+    {},
+    env,
   );
   if (!Array.isArray(account?.organizations) || account.organizations.length > 100)
     throw new ServiceError('BUFFER_ORGANIZATIONS', 'تعذر التحقق من مساحات Buffer.', 400);
@@ -230,7 +258,7 @@ async function discover(connection: DecryptedConnection, _env: Env): Promise<Cha
     const query = `query MawjivoChannels(${batch.map((_, i) => `$o${i}:OrganizationId!`).join(',')}) {${fields}}`;
     const data = await bufferQuery<
       Record<string, RemoteChannel[] | { channels: ChannelConfiguration[] }>
-    >(connection, query, variables);
+    >(connection, query, variables, env);
     for (const [index, org] of batch.entries()) {
       const remote = data['c' + index] as RemoteChannel[],
         config = data['f' + index] as { channels: ChannelConfiguration[] };
@@ -279,7 +307,321 @@ async function discover(connection: DecryptedConnection, _env: Env): Promise<Cha
 }
 export const bufferAdapter: ProviderAdapter = {
   discover,
+  publishBatch,
+  readReceipts,
   async validate(connection, env) {
     return readinessFor(await discover(connection, env));
   },
 };
+import { boundedJson, remoteChannels } from './publishing';
+import { observeRateLimits, reserveRequests } from './rate-budget';
+import { instant, providerError, publicUrl, retryAt } from './redact';
+interface BufferPayload<
+  T = Record<
+    string,
+    {
+      __typename?: string;
+      post?: { id?: string };
+      id?: string;
+      status?: string;
+      sentAt?: string;
+      externalLink?: string;
+    }
+  >,
+> {
+  data?: T;
+  errors?: { extensions?: { code?: string }; path?: unknown[] }[];
+}
+type BufferExchange<T> =
+  | { kind: 'response'; response: Response; body?: BufferPayload<T> }
+  | { kind: 'deferred'; retryAt: string }
+  | { kind: 'uncertain' };
+async function exchange<T = NonNullable<BufferPayload['data']>>(
+  connection: DecryptedConnection,
+  query: string,
+  variables: Record<string, unknown>,
+  purpose: 'publish' | 'receipt' | 'discovery',
+  env: Env,
+): Promise<BufferExchange<T>> {
+  const now = new Date().toISOString();
+  const budget = await reserveRequests(connection.id, 1, purpose, now, env);
+  if (budget.kind === 'deferred') return budget;
+  let response: Response;
+  try {
+    response = await fetch('https://api.buffer.com', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer ' + connection.credentials.apiKey!,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ query, variables }),
+      redirect: 'error',
+      signal: AbortSignal.timeout(25000),
+    });
+  } catch {
+    try {
+      await observeRateLimits(
+        connection.id,
+        new Headers(),
+        new Date().toISOString(),
+        env,
+        budget.reservationId,
+      );
+    } catch {
+      console.error({ event: 'provider_budget_update_failed', provider: 'buffer' });
+    }
+    return { kind: 'uncertain' };
+  }
+  // A bookkeeping failure after a write must not discard an accepted remote ID.
+  try {
+    await observeRateLimits(
+      connection.id,
+      response.headers,
+      new Date().toISOString(),
+      env,
+      budget.reservationId,
+    );
+  } catch {
+    console.error({ event: 'provider_budget_update_failed', provider: 'buffer' });
+  }
+  let body: BufferPayload<T> | undefined;
+  if (response.ok)
+    try {
+      body = (await boundedJson(response)) as BufferPayload<T>;
+    } catch {
+      return { kind: 'uncertain' };
+    }
+  else await response.body?.cancel();
+  return { kind: 'response', response, ...(body ? { body } : {}) };
+}
+function postInput(target: ResolvedTarget, remoteId: string): Record<string, unknown> {
+  const assets = target.assets.map((asset, index) =>
+    asset.mimeType.startsWith('image/')
+      ? {
+          image: {
+            url: asset.url,
+            ...(target.altTexts[index] !== undefined
+              ? { metadata: { altText: target.altTexts[index] } }
+              : {}),
+          },
+        }
+      : { video: { url: asset.url, metadata: { title: target.title ?? '' } } },
+  );
+  const metadata: Record<string, unknown> = {};
+  if ((target.platform === 'x' || target.platform === 'threads') && target.threadParts.length)
+    metadata[target.platform === 'x' ? 'twitter' : 'threads'] = {
+      thread: target.threadParts.map((text, index) => ({
+        text,
+        assets: index === 0 ? assets : [],
+      })),
+    };
+  if (target.platform === 'youtube')
+    metadata.youtube = {
+      title: target.title ?? '',
+      privacy: 'public',
+      madeForKids: false,
+      notifySubscribers: true,
+    };
+  if (target.platform === 'tiktok')
+    metadata.tiktok = { ...(target.title ? { title: target.title } : {}), isAiGenerated: false };
+  if (target.platform === 'instagram')
+    metadata.instagram = {
+      type: target.assets[0]?.mimeType.startsWith('video/') ? 'reel' : 'post',
+      shouldShareToFeed: true,
+    };
+  if (target.platform === 'facebook') metadata.facebook = { type: 'post' };
+  return {
+    channelId: remoteId,
+    text: target.text,
+    assets,
+    mode: 'shareNow',
+    schedulingType: 'automatic',
+    needsApproval: false,
+    ...(Object.keys(metadata).length ? { metadata } : {}),
+  };
+}
+export async function publishBatch(
+  connection: DecryptedConnection,
+  targets: ResolvedTarget[],
+  env: Env,
+): Promise<ProviderResult[]> {
+  const results: ProviderResult[] = [];
+  for (let start = 0; start < targets.length; start += 30) {
+    const batch = targets.slice(start, start + 30),
+      channels = await remoteChannels(connection, batch, env),
+      valid = batch.filter((t) => channels.has(t.channelId));
+    const byChannel = new Map<string, ProviderResult>();
+    for (const t of batch)
+      if (!channels.has(t.channelId))
+        byChannel.set(t.channelId, {
+          kind: 'rejected',
+          channelId: t.channelId,
+          error: providerError('PROVIDER_CHANNEL'),
+        });
+    if (valid.length) {
+      const variables: Record<string, unknown> = {};
+      valid.forEach((t, i) => {
+        variables['i' + i] = postInput(t, channels.get(t.channelId)!);
+      });
+      const query =
+        'mutation MawjivoPublish(' +
+        valid.map((_, i) => '$i' + i + ':CreatePostInput!').join(',') +
+        '){' +
+        valid
+          .map(
+            (_, i) =>
+              'p' +
+              i +
+              ':createPost(input:$i' +
+              i +
+              '){__typename ...on PostActionSuccess{post{id status}} ...on MutationError{message}}',
+          )
+          .join(' ') +
+        '}';
+      const reply = await exchange(connection, query, variables, 'publish', env);
+      for (const [i, t] of valid.entries()) {
+        let result: ProviderResult;
+        if (reply.kind === 'deferred')
+          result = {
+            kind: 'rejected',
+            channelId: t.channelId,
+            error: providerError('PROVIDER_RATE_LIMIT', true),
+            retryAt: reply.retryAt,
+          };
+        else if (reply.kind === 'uncertain')
+          result = {
+            kind: 'uncertain',
+            channelId: t.channelId,
+            error: providerError('PROVIDER_UNCERTAIN'),
+          };
+        else if (!reply.response.ok) {
+          const status = reply.response.status;
+          result =
+            status >= 500 || status === 408
+              ? {
+                  kind: 'uncertain',
+                  channelId: t.channelId,
+                  error: providerError('PROVIDER_UNCERTAIN'),
+                }
+              : {
+                  kind: 'rejected',
+                  channelId: t.channelId,
+                  error: providerError(
+                    status === 429
+                      ? 'PROVIDER_RATE_LIMIT'
+                      : status === 401 || status === 403
+                        ? 'PROVIDER_AUTH'
+                        : 'PROVIDER_CONTENT',
+                    status === 429,
+                  ),
+                  ...(status === 429
+                    ? {
+                        retryAt:
+                          retryAt(reply.response.headers) ??
+                          new Date(Date.now() + 60000).toISOString(),
+                      }
+                    : {}),
+                };
+        } else {
+          const payload = reply.body?.data?.['p' + i];
+          if (
+            payload?.__typename === 'PostActionSuccess' &&
+            typeof payload.post?.id === 'string' &&
+            payload.post.id.length <= 256
+          )
+            result = { kind: 'accepted', channelId: t.channelId, remoteId: payload.post.id };
+          else if (
+            payload?.__typename &&
+            [
+              'InvalidInputError',
+              'NotFoundError',
+              'UnauthorizedError',
+              'LimitReachedError',
+            ].includes(payload.__typename)
+          )
+            result = {
+              kind: 'rejected',
+              channelId: t.channelId,
+              error: providerError(
+                payload.__typename === 'UnauthorizedError'
+                  ? 'PROVIDER_AUTH'
+                  : payload.__typename === 'LimitReachedError'
+                    ? 'PROVIDER_RATE_LIMIT'
+                    : 'PROVIDER_CONTENT',
+                payload.__typename === 'LimitReachedError',
+              ),
+            };
+          else if (
+            reply.body?.errors?.every((e) => e.extensions?.code === 'GRAPHQL_VALIDATION_FAILED') &&
+            reply.body.errors.length
+          )
+            result = {
+              kind: 'rejected',
+              channelId: t.channelId,
+              error: providerError('PROVIDER_CONTENT'),
+            };
+          else
+            result = {
+              kind: 'uncertain',
+              channelId: t.channelId,
+              error: providerError('PROVIDER_UNCERTAIN'),
+            };
+        }
+        byChannel.set(t.channelId, result);
+      }
+    }
+    results.push(...batch.map((t) => byChannel.get(t.channelId)!));
+  }
+  return results;
+}
+export async function readReceipts(
+  connection: DecryptedConnection,
+  remoteIds: string[],
+  env: Env,
+): Promise<ProviderReceipt[]> {
+  const receipts: ProviderReceipt[] = [];
+  for (let start = 0; start < remoteIds.length; start += 30) {
+    const ids = remoteIds.slice(start, start + 30);
+    if (!ids.length) continue;
+    const variables: Record<string, unknown> = {};
+    ids.forEach((id, i) => {
+      variables['i' + i] = { id };
+    });
+    const query =
+      'query MawjivoReceipts(' +
+      ids.map((_, i) => '$i' + i + ':PostInput!').join(',') +
+      '){' +
+      ids
+        .map((_, i) => 'r' + i + ':post(input:$i' + i + '){id status sentAt externalLink}')
+        .join(' ') +
+      '}';
+    const reply = await exchange(connection, query, variables, 'receipt', env);
+    for (const [i, remoteId] of ids.entries()) {
+      const post =
+        reply.kind === 'response' && reply.response.ok ? reply.body?.data?.['r' + i] : undefined;
+      if (post?.id === remoteId && post.status === 'sent')
+        receipts.push({
+          remoteId,
+          state: 'published',
+          ...(instant(post.sentAt) ? { publishedAt: instant(post.sentAt) } : {}),
+          ...(publicUrl(post.externalLink) ? { publicUrl: publicUrl(post.externalLink) } : {}),
+        });
+      else if (post?.id === remoteId && ['sending', 'scheduled'].includes(post.status ?? ''))
+        receipts.push({ remoteId, state: 'processing' });
+      else if (post?.id === remoteId && post.status === 'error')
+        receipts.push({ remoteId, state: 'failed', error: providerError('PROVIDER_FAILED') });
+      else
+        receipts.push({
+          remoteId,
+          state: 'unknown',
+          error: providerError('PROVIDER_RECEIPT', true),
+          ...(reply.kind === 'deferred'
+            ? { retryAt: reply.retryAt }
+            : reply.kind === 'response' && reply.response.status === 429
+              ? { retryAt: retryAt(reply.response.headers) }
+              : {}),
+        });
+    }
+  }
+  return receipts;
+}

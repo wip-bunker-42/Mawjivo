@@ -3,6 +3,7 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import type { MockInstance } from 'vitest';
 import { getCapabilities, saveConnections } from '../src/connections';
 import { discoverChannels } from '../src/providers/types';
+import { seedConnection } from './publishing-fixtures';
 import { resetTestData, testEnv, requestAs, ownerToken, limitedToken } from './helpers';
 const auth = { deviceId: 'owner', allowedWorkspaceIds: '*' as const };
 const buffer = (label: string) => ({
@@ -326,6 +327,7 @@ test('buffer_facebook_groups_and_personal_instagram_are_not_automatic_fallbacks'
       },
     }),
   );
+  await seedConnection({ ...buffer('first'), id: 'buffer', workspaceId: 'workspace-a' });
   const channels = await discoverChannels(
     { ...buffer('first'), id: 'buffer', workspaceId: 'workspace-a' },
     testEnv(),
