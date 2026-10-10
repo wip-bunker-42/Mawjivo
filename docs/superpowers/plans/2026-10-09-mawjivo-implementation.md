@@ -191,11 +191,11 @@
 
 **Interfaces:** تعرف `contracts.rs` النوع `UploadInput {profile_id, workspace_id, file_id, source_asset_id, recipe_id, manifest: UploadManifest}`؛ assetId النهائي يحصل عليه من ticket ولا يخلط بمعرف الأصل. `start_upload(input: UploadInput) -> Result<String, AppError>`، `resume_upload(job_id: String) -> Result<(), AppError>`، `cancel_upload(job_id: String) -> Result<(), AppError>`؛ تستخدم API المهمة 7 وDTO المطابق. حدث `upload-progress`: jobId/assetId/completedBytes/totalBytes/elapsedMs/remainingMs?؛ `uploaded_asset(job_id: String) -> Result<Option<PreparedAsset>, AppError>`.
 
-- [ ] **1. اختبارات فاشلة:** `selection_starts_transfer_without_publish`: `assert!(sent_bytes > 0)` قبل أي confirm مع صفر publish calls؛ الاستكمال: `assert_eq!(completed_part_send_count, 1)` لكل جزء ناجح؛ reuse يعيد assetId نفسه وصفر بايتات إضافية؛ تعديل المصدر: `assert_eq!(error.code, "SOURCE_CHANGED")` وصفر complete calls؛ الإلغاء يبقي المصدر ويحرر حجزه. `assert_eq!(part_bytes, 16 * 1024 * 1024)` للأجزاء غير الأخيرة و`assert!(peak_parallel_requests <= 2)`.
-- [ ] **2. تشغيل الأحمر:** `cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --test upload` مع HTTP/R2 محاكيين.
-- [ ] **3. التنفيذ:** reqwest streaming وقراءة chunks دون تحميل الفيديو كاملًا في الذاكرة، وتخزين session/ETags في SQLite. حساب hash من نفس المصدر، وفحص تغير metadata ثم بصمة نهائية قبل complete. كل ناتج معالجة معرف recipe مستقل. تقدم محدود التحديث ولا يطلق إعلان قارئ شاشة تلقائيًا.
-- [ ] **4. تحقق:** الاختبارات السابقة ورفع fixture أكبر من 32 MiB عبر R2 المحلي، ثم قطع/استكمال الشبكة؛ إثبات عدد البايتات/الأجزاء المرسلة ومطابقة النهائي. الزمن المتبقي تقديري أو غير متاح عند عدم كفاية العينات.
-- [ ] **5. تسجيل:** `git commit -m "feat: upload media once with resume and useful progress"`.
+- [x] **1. اختبارات فاشلة:** `selection_starts_transfer_without_publish`: `assert!(sent_bytes > 0)` قبل أي confirm مع صفر publish calls؛ الاستكمال: `assert_eq!(completed_part_send_count, 1)` لكل جزء ناجح؛ reuse يعيد assetId نفسه وصفر بايتات إضافية؛ تعديل المصدر: `assert_eq!(error.code, "SOURCE_CHANGED")` وصفر complete calls؛ الإلغاء يبقي المصدر ويحرر حجزه. `assert_eq!(part_bytes, 16 * 1024 * 1024)` للأجزاء غير الأخيرة و`assert!(peak_parallel_requests <= 2)`.
+- [x] **2. تشغيل الأحمر:** `cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --test upload` مع HTTP/R2 محاكيين.
+- [x] **3. التنفيذ:** reqwest streaming وقراءة chunks دون تحميل الفيديو كاملًا في الذاكرة، وتخزين session/ETags في SQLite. حساب hash من نفس المصدر، وفحص تغير metadata ثم بصمة نهائية قبل complete. كل ناتج معالجة معرف recipe مستقل. تقدم محدود التحديث ولا يطلق إعلان قارئ شاشة تلقائيًا.
+- [x] **4. تحقق:** الاختبارات السابقة ورفع fixture أكبر من 32 MiB عبر R2 المحلي، ثم قطع/استكمال الشبكة؛ إثبات عدد البايتات/الأجزاء المرسلة ومطابقة النهائي. الزمن المتبقي تقديري أو غير متاح عند عدم كفاية العينات.
+- [x] **5. تسجيل:** `git commit -m "feat: upload media once with resume and useful progress"`.
 
 ### Task 9: موصلات نشر وتحقق مقتصدة دون إعادة كتابة غامضة
 
