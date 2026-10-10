@@ -74,6 +74,32 @@ pub struct PreparedLocalAsset {
 }
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct UploadManifest {
+    pub source_asset_id: String,
+    pub recipe_id: Option<String>,
+    pub original_name: String,
+    pub kind: MediaKind,
+    pub bytes: u64,
+    pub mime_type: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub width: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub height: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub duration_ms: Option<u64>,
+}
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct UploadInput {
+    pub profile_id: String,
+    pub workspace_id: String,
+    pub file_id: String,
+    pub source_asset_id: String,
+    pub recipe_id: Option<String>,
+    pub manifest: UploadManifest,
+}
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PlatformOverride {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub text: Option<String>,

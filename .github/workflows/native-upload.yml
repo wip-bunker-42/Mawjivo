@@ -1,0 +1,41 @@
+name: Windows upload verification
+on:
+  push:
+    branches: [abdo/mawjivo-app]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: native-upload-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  upload:
+    runs-on: windows-2025
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24.21.0
+      - name: Install pinned tools
+        shell: pwsh
+        run: |
+          npm install --global pnpm@12.10.1 --ignore-scripts
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          rustup toolchain install 1.99.0 --profile minimal --component rustfmt,clippy
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          rustup default 1.99.0
+      - name: Install locked dependencies and service artifact
+        shell: pwsh
+        run: |
+          pnpm install --frozen-lockfile
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          pnpm service:artifact
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          pnpm --filter @mawjivo/desktop build
+          exit $LASTEXITCODE
+      - name: Upload regressions
+        shell: pwsh
+        run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --locked --test upload
