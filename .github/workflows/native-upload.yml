@@ -22,8 +22,10 @@ jobs:
       - name: Install pinned tools
         shell: pwsh
         run: |
-          npm install --global pnpm@12.10.1 --ignore-scripts
+          npm.cmd install --global pnpm@12.10.1
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $actualVersion = & pnpm.cmd --version
+          if ($LASTEXITCODE -ne 0 -or $actualVersion -ne '12.10.1') { throw 'Pinned pnpm installation failed.' }
           rustup toolchain install 1.99.0 --profile minimal --component rustfmt,clippy
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           rustup default 1.99.0
@@ -39,13 +41,13 @@ jobs:
       - name: Install locked dependencies and service artifact
         shell: pwsh
         run: |
-          pnpm install --frozen-lockfile
+          pnpm.cmd install --frozen-lockfile
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          pnpm service:artifact
+          pnpm.cmd service:artifact
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          pnpm media:tools
+          pnpm.cmd media:tools
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          pnpm --filter @mawjivo/desktop build
+          pnpm.cmd --filter @mawjivo/desktop build
           exit $LASTEXITCODE
       - name: Upload regressions
         shell: pwsh

@@ -1,6 +1,13 @@
 import { z } from 'zod';
 import { platforms } from './contracts';
-import type { Draft, PostPlan, Submission, Workspace, CapabilitySnapshot } from './contracts';
+import type {
+  Draft,
+  PostPlan,
+  Submission,
+  Workspace,
+  CapabilitySnapshot,
+  UploadInput,
+} from './contracts';
 const id = z.string().min(1).max(160);
 const recipeId = z.string().min(1).max(2048);
 const natural = z.number().int().nonnegative();
@@ -63,6 +70,21 @@ export const UploadManifestSchema = MediaAssetSchema.pick({
     ]),
   })
   .refine((input) => input.mimeType.startsWith(input.kind + '/'));
+export const UploadInputSchema: z.ZodType<UploadInput> = z
+  .strictObject({
+    profileId: id,
+    workspaceId: id,
+    fileId: id,
+    sourceAssetId: id,
+    recipeId: recipeId.nullable(),
+    manifest: UploadManifestSchema,
+  })
+  .refine(
+    (input) =>
+      input.sourceAssetId === input.manifest.sourceAssetId &&
+      input.recipeId === input.manifest.recipeId &&
+      (input.recipeId !== null || input.fileId === input.sourceAssetId),
+  );
 const override = z.strictObject({
   text: z.string().max(100_000).optional(),
   altTexts: z.array(z.string().max(100_000)).optional(),

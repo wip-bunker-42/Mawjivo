@@ -1,4 +1,10 @@
 const segmenter = new Intl.Segmenter('ar', { granularity: 'grapheme' });
+export function imageFilename(originalName: string, originalMime: string, outputMime: string): string {
+  if (originalMime === outputMime) return originalName;
+  if (outputMime !== 'image/jpeg') throw new Error('UNSUPPORTED_IMAGE_OUTPUT');
+  const dot = originalName.lastIndexOf('.');
+  return (dot > 0 ? originalName.slice(0, dot) : originalName) + '.jpg';
+}
 export function videoFilename(title: string, extension: string): string {
   if (!title.trim()) throw new Error('VIDEO_TITLE_REQUIRED');
   const ext = extension.replace(/^\./, '').toLowerCase();

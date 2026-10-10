@@ -56,6 +56,14 @@ export type UploadManifest = Pick<
   MediaAsset,
   'originalName' | 'kind' | 'bytes' | 'mimeType' | 'width' | 'height' | 'durationMs'
 > & { sourceAssetId: string; recipeId: string | null };
+export interface UploadInput {
+  profileId: string;
+  workspaceId: string;
+  fileId: string;
+  sourceAssetId: string;
+  recipeId: string | null;
+  manifest: UploadManifest;
+}
 export interface UploadedPart {
   partNumber: number;
   etag: string;

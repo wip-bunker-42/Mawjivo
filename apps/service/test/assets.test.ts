@@ -5,12 +5,21 @@ import { resetTestData, testEnv, requestAs, ownerToken, limitedToken } from './h
 import { assetAuth, manifest, uploaded, postReference } from './asset-fixtures';
 beforeEach(resetTestData);
 test('local_r2_resumes_a_35_mb_fixture_and_keeps_successful_parts', async () => {
-  const env = testEnv(), size = 35_000_000, partBytes = 16 * 1024 * 1024;
+  const env = testEnv(),
+    size = 35_000_000,
+    partBytes = 16 * 1024 * 1024;
   const original = new Uint8Array(size);
   for (let i = 0; i < size; i++) original[i] = i % 251;
-  const input = { ...manifest(size), kind: 'video' as const, mimeType: 'video/mp4', durationMs: 180_000 };
+  const input = {
+    ...manifest(size),
+    kind: 'video' as const,
+    mimeType: 'video/mp4',
+    durationMs: 180_000,
+  };
   const first = await beginUpload(assetAuth, 'workspace-a', input, env);
-  const row = await env.DB.prepare('SELECT object_key FROM assets WHERE id=?').bind(first.assetId).first<{ object_key: string }>();
+  const row = await env.DB.prepare('SELECT object_key FROM assets WHERE id=?')
+    .bind(first.assetId)
+    .first<{ object_key: string }>();
   const multipart = env.MEDIA.resumeMultipartUpload(row!.object_key, first.multipartId!);
   const send = vi.spyOn(multipart, 'uploadPart');
   const part1 = await multipart.uploadPart(1, original.subarray(0, partBytes));
@@ -21,7 +30,12 @@ test('local_r2_resumes_a_35_mb_fixture_and_keeps_successful_parts', async () => 
   expect(resumed.parts.map((part) => part.partNumber)).toEqual([2, 3]);
   const part2 = await multipart.uploadPart(2, original.subarray(partBytes, 2 * partBytes));
   const part3 = await multipart.uploadPart(3, original.subarray(2 * partBytes));
-  const hash = (bytes: Uint8Array) => crypto.subtle.digest('SHA-256', bytes).then((value) => Array.from(new Uint8Array(value), (n) => n.toString(16).padStart(2, '0')).join(''));
+  const hash = (bytes: Uint8Array) =>
+    crypto.subtle
+      .digest('SHA-256', bytes)
+      .then((value) =>
+        Array.from(new Uint8Array(value), (n) => n.toString(16).padStart(2, '0')).join(''),
+      );
   const sha256 = await hash(original);
   const asset = await completeUpload(assetAuth, first.assetId, [part1, part2, part3], sha256, env);
   expect(send.mock.calls.map(([n]) => n)).toEqual([1, 2, 3]);

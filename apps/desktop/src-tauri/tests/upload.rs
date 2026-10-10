@@ -1,6 +1,6 @@
 use mawjivo_lib::{contracts::UploadInput, media::hash_file, profiles::{LocalStore, ProvisionState}, upload::{UploadEngine, UploadStore, transport::HttpUploadTransport}};
 use serde_json::{Value, json};
-use std::{collections::BTreeMap, io::{Read, Write}, net::{TcpListener, TcpStream}, path::Path, sync::{Arc, Mutex, atomic::{AtomicBool, Ordering}}, thread, time::Duration};
+use std::{collections::BTreeMap, io::{Read, Write, Seek, SeekFrom}, net::{TcpListener, TcpStream}, path::Path, sync::{Arc, Mutex, atomic::{AtomicBool, Ordering}}, thread, time::Duration};
 
 #[derive(Default)]
 struct ServerState {
@@ -161,4 +161,14 @@ fn upload_manifest_cannot_lie_about_source_identity_or_size() {
     assert_eq!(e.start("main", changed, &file).unwrap_err().code, "INVALID_UPLOAD_MANIFEST");
     let mut changed = input; changed.manifest.source_asset_id = "foreign".into();
     assert_eq!(e.start("main", changed, &file).unwrap_err().code, "INVALID_UPLOAD_MANIFEST");
+}
+#[tokio::test]
+async fn changed_content_with_restored_size_and_mtime_is_rejected_on_resume() {
+    let t = tempfile::tempdir().unwrap(); let file = t.path().join("v.mp4"); let e = engine(&t.path().join("db")); let s = Server::new();
+    let id = e.start("main", fixture(&file, 35000000), &file).unwrap(); s.state.lock().unwrap().fail_part = Some(2);
+    assert!(run(&e, &id, &s).await.is_err()); let modified = std::fs::metadata(&file).unwrap().modified().unwrap();
+    let mut local = std::fs::OpenOptions::new().write(true).open(&file).unwrap(); local.seek(SeekFrom::Start(0)).unwrap(); local.write_all(b"Z").unwrap();
+    local.set_times(std::fs::FileTimes::new().set_modified(modified)).unwrap(); drop(local); s.state.lock().unwrap().fail_part = None;
+    assert_eq!(run(&e, &id, &s).await.unwrap_err().code, "SOURCE_CHANGED"); let state = s.state.lock().unwrap();
+    assert_eq!(state.complete_calls, 0); assert!(state.aborted); assert_eq!(state.sends[&1], 1);
 }
