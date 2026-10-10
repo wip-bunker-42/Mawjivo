@@ -9,6 +9,7 @@
     "typecheck": "tsc"
   },
   "dependencies": {
+    "@js-temporal/polyfill": "0.5.1",
     "@mawjivo/core": "workspace:*",
     "@tauri-apps/api": "2.12.2",
     "react": "19.3.0",

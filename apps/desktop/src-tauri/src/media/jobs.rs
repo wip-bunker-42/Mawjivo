@@ -29,6 +29,26 @@ pub struct MediaRegistry {
     files: Mutex<HashMap<String, LocalFile>>,
 }
 impl MediaRegistry {
+    pub(crate) fn restore(&self, window: &str, input: &crate::contracts::UploadInput, path: &Path) -> Result<(), AppError> {
+        let manifest = &input.manifest;
+        let path = path.canonicalize().map_err(|_| crate::upload::session::source_changed())?;
+        if manifest.recipe_id.is_some() { self.file_for(window, &input.source_asset_id)?; }
+        let metadata = std::fs::metadata(&path).map_err(|_| crate::upload::session::source_changed())?;
+        let modified = metadata.modified().map_err(|_| crate::upload::session::source_changed())?;
+        let width = manifest.width.ok_or_else(|| AppError::new("MEDIA_PROBE_REQUIRED", "اختر الملف مجددًا لفحص بياناته."))?;
+        let height = manifest.height.ok_or_else(|| AppError::new("MEDIA_PROBE_REQUIRED", "اختر الملف مجددًا لفحص بياناته."))?;
+        let mut files = self.files.lock().map_err(|_| AppError::new("LOCAL_STATE", "تعذر استعادة الملفات."))?;
+        if let Some(existing) = files.get(&input.file_id) {
+            if existing.owner != window || existing.path != path { return Err(AppError::new("LOCAL_FILE_SCOPE", "هذا الملف لا يخص النافذة الحالية.")); }
+            return Ok(());
+        }
+        files.insert(input.file_id.clone(), LocalFile {
+            owner: window.into(), path, bytes: manifest.bytes, modified,
+            info: Some(super::MediaInfo {mime_type:manifest.mime_type.clone(),bytes:manifest.bytes,width,height,duration_ms:manifest.duration_ms,quality:None}),
+            source: input.recipe_id.as_ref().map(|_|input.source_asset_id.clone()), recipe: input.recipe_id.clone(),
+        });
+        Ok(())
+    }
     pub fn register_probed(
         &self,
         window: &str,

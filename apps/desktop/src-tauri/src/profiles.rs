@@ -73,8 +73,17 @@ fn storage_error(_: impl std::fmt::Debug) -> AppError {
     )
 }
 impl LocalStore {
-    pub fn window_draft(&self, _profile: &str, _window: &str, _workspace: &str) -> Result<Option<crate::contracts::Draft>, AppError> {
-        Ok(None)
+    pub fn window_draft(
+        &self,
+        profile: &str,
+        window: &str,
+        workspace: &str,
+    ) -> Result<Option<crate::contracts::Draft>, AppError> {
+        let value: Option<String> = self.lock()?.query_row(
+            "SELECT d.body FROM composer_drafts c JOIN drafts d ON d.profile_id=c.profile_id AND d.workspace_id=c.workspace_id AND d.id=c.draft_id WHERE c.profile_id=? AND c.window_id=? AND c.workspace_id=?",
+            params![profile, window, workspace], |row| row.get(0)
+        ).optional().map_err(storage_error)?;
+        value.map(|body| serde_json::from_str(&body).map_err(storage_error)).transpose()
     }
     pub fn memory() -> Result<Self, AppError> {
         Self::initialize(Connection::open_in_memory().map_err(storage_error)?)
@@ -89,7 +98,9 @@ impl LocalStore {
             CREATE TABLE IF NOT EXISTS profiles(id TEXT PRIMARY KEY,state_json TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS drafts(profile_id TEXT NOT NULL,workspace_id TEXT NOT NULL,id TEXT NOT NULL,revision INTEGER NOT NULL,body TEXT NOT NULL,PRIMARY KEY(profile_id,workspace_id,id),FOREIGN KEY(profile_id) REFERENCES profiles(id));
             CREATE TABLE IF NOT EXISTS window_drafts(profile_id TEXT NOT NULL,window_id TEXT NOT NULL,workspace_id TEXT NOT NULL,draft_id TEXT NOT NULL,PRIMARY KEY(profile_id,window_id),FOREIGN KEY(profile_id,workspace_id,draft_id) REFERENCES drafts(profile_id,workspace_id,id));
-            PRAGMA user_version=1;").map_err(storage_error)?;
+            CREATE TABLE IF NOT EXISTS composer_drafts(profile_id TEXT NOT NULL,window_id TEXT NOT NULL,workspace_id TEXT NOT NULL,draft_id TEXT NOT NULL,PRIMARY KEY(profile_id,window_id,workspace_id),FOREIGN KEY(profile_id,workspace_id,draft_id) REFERENCES drafts(profile_id,workspace_id,id));
+            INSERT OR IGNORE INTO composer_drafts SELECT profile_id,window_id,workspace_id,draft_id FROM window_drafts;
+            PRAGMA user_version=2;").map_err(storage_error)?;
         Ok(Self { db: Mutex::new(db) })
     }
     pub(crate) fn lock(&self) -> Result<MutexGuard<'_, Connection>, AppError> {
@@ -154,6 +165,7 @@ impl LocalStore {
             ));
         }
         transaction.execute("INSERT INTO window_drafts(profile_id,window_id,workspace_id,draft_id) VALUES(?,?,?,?) ON CONFLICT(profile_id,window_id) DO UPDATE SET workspace_id=excluded.workspace_id,draft_id=excluded.draft_id",params![profile,window,draft.workspace_id,draft.id]).map_err(storage_error)?;
+        transaction.execute("INSERT INTO composer_drafts(profile_id,window_id,workspace_id,draft_id) VALUES(?,?,?,?) ON CONFLICT(profile_id,window_id,workspace_id) DO UPDATE SET draft_id=excluded.draft_id",params![profile,window,draft.workspace_id,draft.id]).map_err(storage_error)?;
         transaction.commit().map_err(storage_error)
     }
     pub fn load_draft(

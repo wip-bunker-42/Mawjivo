@@ -18,6 +18,8 @@ pub fn run() {
             commands::provision_service,
             commands::save_draft,
             commands::load_draft,
+            windows::composer_context,
+            windows::open_composer_window,
             commands::service_request,
             media::jobs::pick_media,
             media::jobs::probe_media,
@@ -27,7 +29,8 @@ pub fn run() {
             upload::commands::resume_upload,
             upload::commands::cancel_upload,
             upload::commands::uploaded_asset,
-            upload::commands::list_uploads
+            upload::commands::list_uploads,
+            upload::commands::restore_uploads
         ])
         .run(tauri::generate_context!())
         .expect("Mawjivo could not start");

@@ -100,11 +100,28 @@ fn checked_input(input: &UploadInput, bytes: u64) -> Result<(), AppError> {
     Ok(())
 }
 impl UploadEngine {
-    pub fn restore_handles(&self, _owner: &str, _profile: &str, _workspace: &str, _sources: &[String], _registry: &crate::media::jobs::MediaRegistry) -> Result<Vec<UploadJob>, AppError> {
-        Err(internal())
+    pub fn restore_handles(
+        &self,
+        owner: &str,
+        profile: &str,
+        workspace: &str,
+        sources: &[String],
+        registry: &crate::media::jobs::MediaRegistry,
+    ) -> Result<Vec<UploadJob>, AppError> {
+        if sources.len() > 20 { return Err(AppError::new("MEDIA_COUNT", "يمكن استعادة حتى 20 ملفًا.")); }
+        let mut sessions = self.store.list(owner, profile, workspace)?;
+        sessions.retain(|session| session.phase != "cancelled" && sources.contains(&session.input.source_asset_id));
+        sessions.sort_by_key(|session| session.input.recipe_id.is_some());
+        for session in &sessions {
+            session.check_source()?;
+            registry.restore(owner, &session.input, &session.path)?;
+        }
+        Ok(sessions.iter().map(UploadSession::public).collect())
     }
-    pub fn revalidate(&self, _owner: &str, _id: &str) -> Result<String, AppError> {
-        Err(internal())
+    pub fn revalidate(&self, owner: &str, id: &str) -> Result<String, AppError> {
+        let session = self.store.get(owner, id)?;
+        if session.phase == "cancelled" { return Err(cancelled()); }
+        self.start(owner, session.input, &session.path)
     }
     pub fn new(store: Arc<UploadStore>) -> Self {
         Self {

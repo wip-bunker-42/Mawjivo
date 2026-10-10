@@ -136,7 +136,8 @@ pub async fn resume_upload(
 ) -> Result<(), AppError> {
     let session = state.engine.store.get(window.label(), &job_id)?;
     let transport = remote(&native, &session.input.profile_id)?;
-    state.launch(window.label(), &job_id, transport, progress(&window))
+    let restarted = state.engine.revalidate(window.label(), &job_id)?;
+    state.launch(window.label(), &restarted, transport, progress(&window))
 }
 #[tauri::command]
 pub async fn cancel_upload(
@@ -181,6 +182,19 @@ pub fn list_uploads(
     state
         .engine
         .sessions(window.label(), &profile_id, &workspace_id)
+}
+#[tauri::command]
+pub fn restore_uploads(
+    window: Window,
+    native: State<'_, NativeState>,
+    media: State<'_, Arc<MediaState>>,
+    state: State<'_, Arc<UploadState>>,
+    profile_id: String,
+    workspace_id: String,
+    source_asset_ids: Vec<String>,
+) -> Result<Vec<UploadJob>, AppError> {
+    native.store.get_state(&profile_id)?;
+    state.engine.restore_handles(window.label(), &profile_id, &workspace_id, &source_asset_ids, &media.registry)
 }
 pub fn setup(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let local = app.state::<NativeState>().store.clone();

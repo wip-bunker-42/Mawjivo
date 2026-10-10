@@ -3,9 +3,11 @@ import type { ReactElement } from 'react';
 import { SetupPage } from './features/setup/SetupPage';
 import { ConnectionsPage } from './features/settings/ConnectionsPage';
 import { WorkspaceSettings } from './features/settings/WorkspaceSettings';
+import { ComposerPage } from './features/composer/ComposerPage';
+import { WorkspaceSelect } from './features/workspaces/WorkspaceSelect';
 import type { Workspace } from '@mawjivo/core';
 import type { ServiceProfile } from './bridge';
-import { listProfiles, serviceRequest, errorMessage } from './bridge';
+import { listProfiles, serviceRequest, errorMessage, openComposerWindow } from './bridge';
 
 const pages = [
   { id: 'compose', label: 'منشور جديد' },
@@ -27,6 +29,16 @@ export function App(): ReactElement {
   const workspace = workspaces.find((item) => item.id === workspaceId) ?? null;
   const profile =
     profiles.find((item) => item.id === workspace?.serviceProfileId) ?? profiles[0] ?? null;
+  useEffect(() => {
+    function shortcut(event: KeyboardEvent): void {
+      if (event.ctrlKey && event.shiftKey && event.code === 'KeyN' && !event.repeat) {
+        event.preventDefault();
+        void openComposerWindow().catch((error) => setMessage(errorMessage(error)));
+      }
+    }
+    document.addEventListener('keydown', shortcut);
+    return () => document.removeEventListener('keydown', shortcut);
+  }, []);
   useEffect(() => {
     void listProfiles()
       .then((profiles) => {
@@ -71,22 +83,7 @@ export function App(): ReactElement {
           </h1>
           <p className="subtitle">نشر واضح، من مكان واحد.</p>
         </div>
-        <div className="workspace-field">
-          <label htmlFor="workspace">مساحة العمل</label>
-          <select
-            id="workspace"
-            disabled={!workspaces.length}
-            value={workspaceId}
-            onChange={(event) => setWorkspaceId(event.target.value)}
-          >
-            {!workspaces.length && <option value="">لم تُضف مساحة بعد</option>}
-            {workspaces.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.name}
-              </option>
-            ))}
-          </select>
-        </div>
+        <WorkspaceSelect workspaces={workspaces} value={workspaceId} onChange={setWorkspaceId} />
       </header>
       <nav aria-label="صفحات التطبيق" className="navigation">
         {pages.map((item) => (
@@ -145,6 +142,8 @@ export function App(): ReactElement {
               />
             )}
           </>
+        ) : page === 'compose' && workspace ? (
+          <ComposerPage workspace={workspace} />
         ) : (
           <section className="setup-notice" aria-labelledby="setup-heading">
             <h3 id="setup-heading">أكمل الإعداد للبدء</h3>

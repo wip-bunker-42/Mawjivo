@@ -353,11 +353,18 @@ export function buildPlan(input: Draft, inputCaps: CapabilitySnapshot, now: ISOI
               sourceAssetId: asset.id,
             });
           if (recipe.outputMimeType !== asset.mimeType)
-            note(channel, 'MEDIA_CONVERTED', 'نسخة محلية بصيغة متوافقة.', {
-              sourceAssetId: asset.id,
-              from: asset.mimeType,
-              to: recipe.outputMimeType,
-            });
+            note(
+              channel,
+              'MEDIA_CONVERTED',
+              'تحويل نسخة محلية إلى ' +
+                (recipe.outputMimeType === 'image/jpeg' ? 'JPEG' : recipe.outputMimeType) +
+                '.',
+              {
+                sourceAssetId: asset.id,
+                from: asset.mimeType,
+                to: recipe.outputMimeType,
+              },
+            );
           if (recipe.maxDurationMs !== undefined)
             note(
               channel,

@@ -181,3 +181,50 @@ main {
     gap: 1rem;
   }
 }
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-block: 0.7rem;
+}
+.media-list {
+  padding-inline-start: 1.6rem;
+}
+.media-list > li {
+  margin-block: 1rem;
+  padding: 0.8rem;
+  border: 1px solid #35424e;
+  border-radius: 8px;
+}
+.upload-progress {
+  display: grid;
+  gap: 0.3rem;
+  margin-block: 1rem;
+}
+progress {
+  width: 100%;
+  max-width: 620px;
+  height: 1.1rem;
+  accent-color: #eabc76;
+}
+dialog {
+  background: #18212a;
+  color: #eef2f6;
+  border: 1px solid #63758a;
+  border-radius: 12px;
+  padding: 1.5rem;
+  width: min(760px, 90vw);
+  max-height: 85vh;
+  overflow: auto;
+}
+dialog::backdrop {
+  background: rgb(0 0 0 / 70%);
+}
+.post-preview {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.thread-part {
+  border-block-start: 1px solid #35424e;
+  padding-block: 1rem;
+}

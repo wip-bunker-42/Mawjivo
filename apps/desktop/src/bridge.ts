@@ -53,3 +53,88 @@ export function serviceRequest<T>(
 ): Promise<T> {
   return native('service_request', { profileId, method, path, body: body ?? null });
 }
+import type {
+  CapabilitySnapshot,
+  Draft,
+  MediaAsset,
+  MediaRecipe,
+  PreparedAsset,
+  PublicationReceipt,
+  Submission,
+  UploadInput,
+  UploadManifest,
+  Workspace,
+} from '@mawjivo/core';
+import { listen } from '@tauri-apps/api/event';
+export interface SelectedFile {
+  fileId: string;
+  originalName: string;
+  bytes: number;
+  mimeType: string;
+}
+export interface PreparedLocalAsset {
+  fileId: string;
+  sourceAssetId: string;
+  recipeId: string;
+  mimeType: string;
+  bytes: number;
+  sha256: string;
+}
+export interface UploadProgress {
+  jobId: string;
+  assetId: string | null;
+  completedBytes: number;
+  totalBytes: number;
+  elapsedMs: number;
+  remainingMs: number | null;
+  phase: string;
+  error?: NativeError | null;
+}
+export interface UploadJob extends UploadProgress {
+  fileId: string;
+  sourceAssetId: string;
+  recipeId: string | null;
+}
+export interface ComposerContext {
+  windowId: string;
+  draft: Draft | null;
+}
+export const composerContext = (profileId: string, workspaceId: string) =>
+  native<ComposerContext>('composer_context', { profileId, workspaceId });
+export const saveDraft = (profileId: string, windowId: string, draft: Draft) =>
+  native<void>('save_draft', { profileId, windowId, draft });
+export const pickMedia = () => native<SelectedFile[]>('pick_media');
+export const probeMedia = (fileId: string) => native<MediaAsset>('probe_media', { fileId });
+export const prepareMedia = (fileId: string, recipe: MediaRecipe) =>
+  native<PreparedLocalAsset>('prepare_media', { fileId, recipe });
+export const startUpload = (input: UploadInput) => native<string>('start_upload', { input });
+export const resumeUpload = (jobId: string) => native<void>('resume_upload', { jobId });
+export const cancelUpload = (jobId: string) => native<void>('cancel_upload', { jobId });
+export const uploadedAsset = (jobId: string) =>
+  native<PreparedAsset | null>('uploaded_asset', { jobId });
+export const listUploads = (profileId: string, workspaceId: string) =>
+  native<UploadJob[]>('list_uploads', { profileId, workspaceId });
+export const restoreUploads = (profileId: string, workspaceId: string, sourceAssetIds: string[]) =>
+  native<UploadJob[]>('restore_uploads', { profileId, workspaceId, sourceAssetIds });
+export const openComposerWindow = () => native<string>('open_composer_window');
+export function onUploadProgress(
+  windowId: string,
+  callback: (progress: UploadProgress) => void,
+): Promise<() => void> {
+  return listen<UploadProgress>('upload-progress', (event) => callback(event.payload), {
+    target: { kind: 'Window', label: windowId },
+  });
+}
+export const capabilities = (workspace: Workspace) =>
+  serviceRequest<CapabilitySnapshot>(
+    workspace.serviceProfileId,
+    'GET',
+    '/api/workspaces/' + workspace.id + '/capabilities',
+  );
+export const submitPublication = (workspace: Workspace, submission: Submission) =>
+  serviceRequest<PublicationReceipt>(
+    workspace.serviceProfileId,
+    'POST',
+    '/api/workspaces/' + workspace.id + '/posts',
+    submission,
+  );
