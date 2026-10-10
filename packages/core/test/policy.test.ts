@@ -158,3 +158,9 @@ describe('publication plans', () => {
     expect(plan.notes.some((n) => n.code === 'MEDIA_COMPRESSED')).toBe(false);
   });
 });
+test('local_clipping_of_a_supported_mov_requests_the_bundled_mp4_encoder', () => {
+ const capabilities=caps();
+ capabilities.channels.find(c=>c.platform==='x')!.limits.video!.mimeTypes.push('video/quicktime');
+ const plan=buildPlan(draft({title:'عنوان',assets:[{...video(),mimeType:'video/quicktime',originalName:'الأصل.mov'}],selections:['x']}),capabilities,now);
+ expect(plan.mediaRecipes[0]?.outputMimeType).toBe('video/mp4');
+});

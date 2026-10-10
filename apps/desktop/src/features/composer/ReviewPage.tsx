@@ -26,6 +26,11 @@ export function ReviewPage({
     heading.current?.focus();
     return () => dialog.current?.close();
   }, []);
+  function close(): void {
+    if (sending) return;
+    dialog.current?.close();
+    onClose();
+  }
   const date = plan.dueAt
     ? new Intl.DateTimeFormat('ar-EG', { dateStyle: 'full', timeStyle: 'short', timeZone }).format(
         new Date(plan.dueAt),
@@ -38,7 +43,7 @@ export function ReviewPage({
       data-plan-hash={hash}
       onCancel={(e) => {
         e.preventDefault();
-        if (!sending) onClose();
+        close();
       }}
     >
       <h3 id="review-heading" ref={heading} tabIndex={-1}>
@@ -99,7 +104,7 @@ export function ReviewPage({
         <button type="button" className="primary" disabled={!ready || sending} onClick={onConfirm}>
           {sending ? 'جارٍ الإرسال…' : 'موافق، انشر'}
         </button>
-        <button type="button" disabled={sending} onClick={onClose}>
+        <button type="button" disabled={sending} onClick={close}>
           رجوع للتعديل
         </button>
       </div>
