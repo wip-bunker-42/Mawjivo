@@ -439,7 +439,10 @@ async fn native_dispatch_starts_once_and_cancels_an_active_transfer() {
     let file = t.path().join("v.mp4");
     let state = Arc::new(UploadState::new(engine(&t.path().join("db"))));
     let s = Server::new();
-    let id = state.engine.start("main", fixture(&file, 35000000), &file).unwrap();
+    let id = state
+        .engine
+        .start("main", fixture(&file, 35000000), &file)
+        .unwrap();
     let before = hash_file(&file).unwrap();
     s.state.lock().unwrap().hold_body = true;
     struct ReleaseBody(Arc<Mutex<ServerState>>);
@@ -450,11 +453,18 @@ async fn native_dispatch_starts_once_and_cancels_an_active_transfer() {
     }
     let release_body = ReleaseBody(s.state.clone());
     // The command returns while streaming continues in the native runtime.
-    state.launch("main", &id, s.remote(), Arc::new(|_| {})).unwrap();
-    state.launch("main", &id, s.remote(), Arc::new(|_| {})).unwrap();
+    state
+        .launch("main", &id, s.remote(), Arc::new(|_| {}))
+        .unwrap();
+    state
+        .launch("main", &id, s.remote(), Arc::new(|_| {}))
+        .unwrap();
     let deadline = std::time::Instant::now() + Duration::from_secs(10);
     while s.state.lock().unwrap().active == 0 {
-        assert!(std::time::Instant::now() < deadline, "selection never started transfer");
+        assert!(
+            std::time::Instant::now() < deadline,
+            "selection never started transfer"
+        );
         tokio::time::sleep(Duration::from_millis(5)).await;
     }
     let denied = state.cancel("other", &id, &s.remote()).await.unwrap_err();
@@ -463,7 +473,10 @@ async fn native_dispatch_starts_once_and_cancels_an_active_transfer() {
     drop(release_body);
     result.unwrap();
     assert_eq!(hash_file(&file).unwrap(), before);
-    assert_eq!(state.engine.sessions("main", "profile", "space").unwrap()[0].phase, "cancelled");
+    assert_eq!(
+        state.engine.sessions("main", "profile", "space").unwrap()[0].phase,
+        "cancelled"
+    );
     assert!(state.engine.prepared("main", &id).unwrap().is_none());
     let remote = s.state.lock().unwrap();
     assert!(remote.aborted);

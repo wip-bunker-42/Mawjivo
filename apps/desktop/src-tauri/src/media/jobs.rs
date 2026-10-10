@@ -29,18 +29,48 @@ pub struct MediaRegistry {
     files: Mutex<HashMap<String, LocalFile>>,
 }
 impl MediaRegistry {
-    pub fn register_probed(&self, window: &str, path: &Path, info: super::MediaInfo) -> Result<String, AppError> {
+    pub fn register_probed(
+        &self,
+        window: &str,
+        path: &Path,
+        info: super::MediaInfo,
+    ) -> Result<String, AppError> {
         self.register_file(window, path, Some(info), None, None)
     }
-    pub fn register_prepared(&self, window: &str, path: &Path, source: &str, recipe: &str, info: super::MediaInfo) -> Result<String, AppError> {
+    pub fn register_prepared(
+        &self,
+        window: &str,
+        path: &Path,
+        source: &str,
+        recipe: &str,
+        info: super::MediaInfo,
+    ) -> Result<String, AppError> {
         self.file_for(window, source)?;
-        self.register_file(window, path, Some(info), Some(source.into()), Some(recipe.into()))
+        self.register_file(
+            window,
+            path,
+            Some(info),
+            Some(source.into()),
+            Some(recipe.into()),
+        )
     }
-    pub fn upload_for(&self, window: &str, input: &crate::contracts::UploadInput) -> Result<(PathBuf, crate::contracts::UploadManifest), AppError> {
+    pub fn upload_for(
+        &self,
+        window: &str,
+        input: &crate::contracts::UploadInput,
+    ) -> Result<(PathBuf, crate::contracts::UploadManifest), AppError> {
         let path = self.file_for(window, &input.file_id)?;
         let source_path = self.file_for(window, &input.source_asset_id)?;
-        let invalid = || AppError::new("INVALID_UPLOAD_MANIFEST", "بيانات الرفع لا تطابق الملف المختار.");
-        let files = self.files.lock().map_err(|_| AppError::new("LOCAL_STATE", "تعذر فتح قائمة الملفات."))?;
+        let invalid = || {
+            AppError::new(
+                "INVALID_UPLOAD_MANIFEST",
+                "بيانات الرفع لا تطابق الملف المختار.",
+            )
+        };
+        let files = self
+            .files
+            .lock()
+            .map_err(|_| AppError::new("LOCAL_STATE", "تعذر فتح قائمة الملفات."))?;
         let file = files.get(&input.file_id).ok_or_else(invalid)?;
         let source = files.get(&input.source_asset_id).ok_or_else(invalid)?;
         let info = file.info.as_ref().ok_or_else(invalid)?;
@@ -48,24 +78,40 @@ impl MediaRegistry {
         if file.recipe != input.recipe_id
             || file.source.as_deref().unwrap_or(&input.file_id) != input.source_asset_id
             || input.manifest.source_asset_id != input.source_asset_id
-            || input.manifest.recipe_id != input.recipe_id {
+            || input.manifest.recipe_id != input.recipe_id
+        {
             return Err(invalid());
         }
-        let original_name = source_path.file_name().and_then(|n| n.to_str()).ok_or_else(invalid)?;
+        let original_name = source_path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .ok_or_else(invalid)?;
         let name = if info.mime_type == source_info.mime_type || info.duration_ms.is_some() {
             original_name.to_owned()
         } else if info.mime_type == "image/jpeg" {
-            let stem = original_name.rsplit_once('.').filter(|(stem, _)| !stem.is_empty()).map(|(stem, _)| stem).unwrap_or(original_name);
+            let stem = original_name
+                .rsplit_once('.')
+                .filter(|(stem, _)| !stem.is_empty())
+                .map(|(stem, _)| stem)
+                .unwrap_or(original_name);
             format!("{stem}.jpg")
         } else {
             return Err(invalid());
         };
-        let kind = if info.duration_ms.is_some() { MediaKind::Video } else { MediaKind::Image };
+        let kind = if info.duration_ms.is_some() {
+            MediaKind::Video
+        } else {
+            MediaKind::Image
+        };
         let m = &input.manifest;
-        if m.original_name != name || m.kind != kind || m.bytes != info.bytes || m.mime_type != info.mime_type
+        if m.original_name != name
+            || m.kind != kind
+            || m.bytes != info.bytes
+            || m.mime_type != info.mime_type
             || m.width.is_some_and(|v| v != info.width)
             || m.height.is_some_and(|v| v != info.height)
-            || m.duration_ms.is_some_and(|v| Some(v) != info.duration_ms) {
+            || m.duration_ms.is_some_and(|v| Some(v) != info.duration_ms)
+        {
             return Err(invalid());
         }
         let mut manifest = m.clone();
@@ -77,7 +123,14 @@ impl MediaRegistry {
     pub fn register(&self, window: &str, path: &Path) -> Result<String, AppError> {
         self.register_file(window, path, None, None, None)
     }
-    fn register_file(&self, window: &str, path: &Path, info: Option<super::MediaInfo>, source: Option<String>, recipe: Option<String>) -> Result<String, AppError> {
+    fn register_file(
+        &self,
+        window: &str,
+        path: &Path,
+        info: Option<super::MediaInfo>,
+        source: Option<String>,
+        recipe: Option<String>,
+    ) -> Result<String, AppError> {
         let path = path
             .canonicalize()
             .map_err(|_| AppError::new("LOCAL_FILE", "تعذر فتح الملف المختار."))?;
@@ -90,7 +143,10 @@ impl MediaRegistry {
             ));
         }
         if info.as_ref().is_some_and(|v| v.bytes != metadata.len()) {
-            return Err(AppError::new("LOCAL_FILE_CHANGED", "تغير الملف المحلي؛ اختره مجددًا."));
+            return Err(AppError::new(
+                "LOCAL_FILE_CHANGED",
+                "تغير الملف المحلي؛ اختره مجددًا.",
+            ));
         }
         let modified = metadata
             .modified()
@@ -254,7 +310,10 @@ pub async fn pick_media(
                     .and_then(|n| n.to_str())
                     .ok_or_else(|| AppError::new("MEDIA_NAME", "اسم الملف غير صالح."))?
                     .to_owned();
-                let file_id = state.registry.register_probed(window.label(), &path, info.clone())?;
+                let file_id =
+                    state
+                        .registry
+                        .register_probed(window.label(), &path, info.clone())?;
                 Ok(SelectedFile {
                     file_id,
                     original_name,
@@ -362,7 +421,13 @@ pub async fn prepare_media(
             }
         };
         let sha256 = hash_file(&output)?;
-        let output_id = task_state.registry.register_prepared(task_window.label(), &output, &task_id, &recipe.id, info.clone())?;
+        let output_id = task_state.registry.register_prepared(
+            task_window.label(),
+            &output,
+            &task_id,
+            &recipe.id,
+            info.clone(),
+        )?;
         Ok(PreparedLocalAsset {
             file_id: output_id,
             source_asset_id: task_id,

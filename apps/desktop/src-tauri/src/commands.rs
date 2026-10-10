@@ -6,10 +6,11 @@ use crate::{
     vault::{SystemVault, Vault},
 };
 use serde_json::Value;
+use std::sync::Arc;
 use tauri::{Manager, State, Window};
 use zeroize::Zeroizing;
 pub struct NativeState {
-    pub store: LocalStore,
+    pub store: Arc<LocalStore>,
     pub setup_lock: tokio::sync::Mutex<()>,
 }
 #[tauri::command]
@@ -173,10 +174,11 @@ pub fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let store = LocalStore::open(&directory.join("mawjivo.sqlite"))
         .map_err(|error| std::io::Error::other(error.message_ar))?;
     app.manage(NativeState {
-        store,
+        store: Arc::new(store),
         setup_lock: tokio::sync::Mutex::new(()),
     });
     crate::media::jobs::setup(app)?;
+    crate::upload::commands::setup(app)?;
     Ok(())
 }
 #[cfg(test)]

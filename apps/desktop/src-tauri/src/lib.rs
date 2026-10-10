@@ -21,7 +21,12 @@ pub fn run() {
             media::jobs::pick_media,
             media::jobs::probe_media,
             media::jobs::prepare_media,
-            media::jobs::cancel_media
+            media::jobs::cancel_media,
+            upload::commands::start_upload,
+            upload::commands::resume_upload,
+            upload::commands::cancel_upload,
+            upload::commands::uploaded_asset,
+            upload::commands::list_uploads
         ])
         .run(tauri::generate_context!())
         .expect("Mawjivo could not start");
