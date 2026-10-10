@@ -59,6 +59,9 @@ impl UploadSession {
         }
     }
     pub fn completed_bytes(&self) -> u64 {
+        if self.phase == "complete" && self.ready.is_some() {
+            return self.input.manifest.bytes;
+        }
         self.parts
             .iter()
             .map(|p| {
