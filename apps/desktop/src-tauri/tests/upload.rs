@@ -81,6 +81,8 @@ impl Drop for Server {
     }
 }
 fn handle(mut stream: TcpStream, origin: &str, state: &Mutex<ServerState>) {
+    // Winsock accepted sockets inherit the listener's nonblocking mode.
+    stream.set_nonblocking(false).unwrap();
     stream
         .set_read_timeout(Some(Duration::from_secs(10)))
         .unwrap();
@@ -280,6 +282,24 @@ async fn reuse_returns_the_same_asset_with_no_additional_bytes() {
     run(&e, &next, &s).await.unwrap();
     assert_eq!(first, e.prepared("main", &next).unwrap().unwrap());
     assert_eq!(s.state.lock().unwrap().total_sent, bytes);
+}
+#[tokio::test]
+async fn reuse_from_another_local_session_reports_all_bytes_complete() {
+    let t = tempfile::tempdir().unwrap();
+    let file = t.path().join("v.mp4");
+    let first = engine(&t.path().join("first.db"));
+    let s = Server::new();
+    let input = fixture(&file, 90000);
+    let id = first.start("main", input.clone(), &file).unwrap();
+    run(&first, &id, &s).await.unwrap();
+    let sent = s.state.lock().unwrap().total_sent;
+    let next = engine(&t.path().join("next.db"));
+    let id = next.start("main", input, &file).unwrap();
+    run(&next, &id, &s).await.unwrap();
+    assert_eq!(s.state.lock().unwrap().total_sent, sent);
+    let jobs = next.sessions("main", "profile", "space").unwrap();
+    assert_eq!(jobs[0].phase, "complete");
+    assert_eq!(jobs[0].completed_bytes, jobs[0].total_bytes);
 }
 #[tokio::test]
 async fn source_change_aborts_without_completing_or_publishing() {
