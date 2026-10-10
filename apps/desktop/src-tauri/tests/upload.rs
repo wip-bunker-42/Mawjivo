@@ -492,22 +492,40 @@ async fn native_dispatch_reports_a_local_storage_failure_to_the_window() {
     let file = t.path().join("v.mp4");
     let state = Arc::new(UploadState::new(engine(&db)));
     let s = Server::new();
-    let id = state.engine.start("main", fixture(&file, 90000), &file).unwrap();
+    let id = state
+        .engine
+        .start("main", fixture(&file, 90000), &file)
+        .unwrap();
     // A real SQLite write failure occurs after start returns, in the native worker.
     rusqlite::Connection::open(&db).unwrap().execute_batch(
         "CREATE TRIGGER upload_disk_full BEFORE UPDATE ON upload_sessions BEGIN SELECT RAISE(ABORT,'disk full fixture'); END;",
     ).unwrap();
     let events = Arc::new(Mutex::new(Vec::new()));
     let received = events.clone();
-    state.launch("main", &id, s.remote(), Arc::new(move |event| {
-        received.lock().unwrap().push(event);
-    })).unwrap();
+    state
+        .launch(
+            "main",
+            &id,
+            s.remote(),
+            Arc::new(move |event| {
+                received.lock().unwrap().push(event);
+            }),
+        )
+        .unwrap();
     let deadline = std::time::Instant::now() + Duration::from_secs(10);
     loop {
-        if events.lock().unwrap().iter().any(|event| event.error.is_some()) {
+        if events
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|event| event.error.is_some())
+        {
             break;
         }
-        assert!(std::time::Instant::now() < deadline, "upload failure was silently lost");
+        assert!(
+            std::time::Instant::now() < deadline,
+            "upload failure was silently lost"
+        );
         tokio::time::sleep(Duration::from_millis(10)).await;
     }
     let events = events.lock().unwrap();

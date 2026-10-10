@@ -13,6 +13,7 @@ use std::{
         Arc, Mutex,
         atomic::{AtomicBool, Ordering},
     },
+    time::Instant,
 };
 use tauri::{Emitter, Manager, State, Window};
 use zeroize::Zeroizing;
@@ -38,7 +39,7 @@ impl UploadState {
         remote: HttpUploadTransport,
         sink: ProgressSink,
     ) -> Result<(), AppError> {
-        self.engine.store.get(owner, id)?;
+        let initial = self.engine.store.get(owner, id)?;
         let flag = {
             let mut active = self.active.lock().map_err(|_| state_error())?;
             if active.contains_key(id) {
@@ -52,8 +53,32 @@ impl UploadState {
         let owner = owner.to_owned();
         let id = id.to_owned();
         tauri::async_runtime::spawn(async move {
-            // The engine persists failures and emits scoped progress; never log response bodies.
-            let _ = state.engine.run(&owner, &id, &remote, flag, sink).await;
+            let started = Instant::now();
+            let reported = Arc::new(AtomicBool::new(false));
+            let remembered = reported.clone();
+            let destination = sink.clone();
+            let tracked: ProgressSink = Arc::new(move |event| {
+                if event.error.is_some() {
+                    remembered.store(true, Ordering::Relaxed);
+                }
+                destination(event);
+            });
+            if let Err(error) = state.engine.run(&owner, &id, &remote, flag, tracked).await
+                && !reported.load(Ordering::Relaxed)
+            {
+                // A failed local write cannot persist its own error. Still report it to its window.
+                let session = state.engine.store.get(&owner, &id).unwrap_or(initial);
+                sink(super::progress::UploadProgress {
+                    job_id: id.clone(),
+                    asset_id: session.asset_id.clone(),
+                    completed_bytes: session.completed_bytes(),
+                    total_bytes: session.input.manifest.bytes,
+                    elapsed_ms: started.elapsed().as_millis() as u64,
+                    remaining_ms: None,
+                    phase: if error.retryable { "paused" } else { "failed" }.into(),
+                    error: Some(error),
+                });
+            }
             if let Ok(mut active) = state.active.lock() {
                 active.remove(&id);
             }
