@@ -1,4 +1,6 @@
-use super::{UploadEngine, UploadJob, UploadStore, progress::ProgressSink, transport::HttpUploadTransport};
+use super::{
+    UploadEngine, UploadJob, UploadStore, progress::ProgressSink, transport::HttpUploadTransport,
+};
 use crate::{
     commands::NativeState,
     contracts::{AppError, PreparedAsset, UploadInput},
@@ -24,7 +26,10 @@ fn state_error() -> AppError {
 }
 impl UploadState {
     pub fn new(engine: UploadEngine) -> Self {
-        Self { engine, active: Mutex::new(HashMap::new()) }
+        Self {
+            engine,
+            active: Mutex::new(HashMap::new()),
+        }
     }
     pub fn launch(
         self: &Arc<Self>,
@@ -148,11 +153,15 @@ pub fn list_uploads(
     workspace_id: String,
 ) -> Result<Vec<UploadJob>, AppError> {
     native.store.get_state(&profile_id)?;
-    state.engine.sessions(window.label(), &profile_id, &workspace_id)
+    state
+        .engine
+        .sessions(window.label(), &profile_id, &workspace_id)
 }
 pub fn setup(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let local = app.state::<NativeState>().store.clone();
     let store = UploadStore::new(local).map_err(|e| std::io::Error::other(e.message_ar))?;
-    app.manage(Arc::new(UploadState::new(UploadEngine::new(Arc::new(store)))));
+    app.manage(Arc::new(UploadState::new(UploadEngine::new(Arc::new(
+        store,
+    )))));
     Ok(())
 }

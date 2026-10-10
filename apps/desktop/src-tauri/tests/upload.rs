@@ -170,7 +170,7 @@ fn handle(mut stream: TcpStream, origin: &str, state: &Mutex<ServerState>) {
                     .map(|n| n.as_u64().unwrap() as u32)
                     .collect::<Vec<_>>()
             } else {
-                (1..=((v["bytes"].as_u64().unwrap() + 16_777_215) / 16_777_216) as u32).collect()
+                (1..=v["bytes"].as_u64().unwrap().div_ceil(16_777_216) as u32).collect()
             };
             value = json!({"assetId":"remote-asset", "multipartId":if s.completed {Value::Null} else {json!("multipart-1")}, "expiresAt":"2099-01-01T00:00:00Z", "parts":if s.completed {vec![]} else {count.into_iter().take(16).map(|n| json!({"partNumber":n,"url":if s.foreign_url {"https://foreign.invalid/r2/part/1".into()} else {format!("{origin}/r2/part/{n}")}})).collect::<Vec<_>>()} });
         } else if path.ends_with("/complete") {
@@ -483,4 +483,36 @@ async fn native_dispatch_starts_once_and_cancels_an_active_transfer() {
     assert_eq!(remote.complete_calls, 0);
     assert_eq!(remote.publish_calls, 0);
     assert_eq!(remote.peak, 1);
+}
+#[tokio::test]
+async fn native_dispatch_reports_a_local_storage_failure_to_the_window() {
+    use mawjivo_lib::upload::commands::UploadState;
+    let t = tempfile::tempdir().unwrap();
+    let db = t.path().join("db");
+    let file = t.path().join("v.mp4");
+    let state = Arc::new(UploadState::new(engine(&db)));
+    let s = Server::new();
+    let id = state.engine.start("main", fixture(&file, 90000), &file).unwrap();
+    // A real SQLite write failure occurs after start returns, in the native worker.
+    rusqlite::Connection::open(&db).unwrap().execute_batch(
+        "CREATE TRIGGER upload_disk_full BEFORE UPDATE ON upload_sessions BEGIN SELECT RAISE(ABORT,'disk full fixture'); END;",
+    ).unwrap();
+    let events = Arc::new(Mutex::new(Vec::new()));
+    let received = events.clone();
+    state.launch("main", &id, s.remote(), Arc::new(move |event| {
+        received.lock().unwrap().push(event);
+    })).unwrap();
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    loop {
+        if events.lock().unwrap().iter().any(|event| event.error.is_some()) {
+            break;
+        }
+        assert!(std::time::Instant::now() < deadline, "upload failure was silently lost");
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    let events = events.lock().unwrap();
+    let failure = events.iter().find(|event| event.error.is_some()).unwrap();
+    assert_eq!(failure.job_id, id);
+    assert_eq!(failure.error.as_ref().unwrap().code, "UPLOAD_STORE");
+    assert_eq!(s.state.lock().unwrap().publish_calls, 0);
 }
