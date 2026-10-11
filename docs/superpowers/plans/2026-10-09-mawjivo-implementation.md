@@ -239,12 +239,14 @@
 
 **Interfaces:** تعرف contracts.ts النوعين `PostPage = {items: PublicationReceipt[]; nextCursor: string | null}` و`Summary = {localDate: string; timeZone: string; completePosts: number; partialPosts: number; failedPosts: number; unknownPosts: number; publishedTargets: number; upcomingScheduled: number}`. `listPosts(auth: AuthContext, workspaceId: string, filter: 'all' | 'scheduled' | 'needsAction', cursor: string | undefined, env: Env): Promise<PostPage>`؛ `getSummary(auth: AuthContext, workspaceId: string, localDate: string, env: Env): Promise<Summary>`. UI يستعمل revise/cancel من المهمة 11 ويحتفظ بالمسودة حتى نجاح التعديل.
 
-- [ ] **1. اختبارات فاشلة:** `one_post_six_targets_is_one_post`: `expect(summary.completePosts).toBe(1)` و`expect(summary.publishedTargets).toBe(6)`؛ partial/unknown ليست complete؛ حدود اليوم بحسب المنطقة؛ 409 يبقي draftId/text دون تغيير؛ cancelled ينتظر `expect(summary.upcomingScheduled).toBe(0)`؛ تبديل المساحة ينتظر `expect(items.every(p => p.workspaceId === selectedWorkspaceId)).toBe(true)`.
-- [ ] **2. تشغيل الأحمر:** `pnpm --filter @mawjivo/service test -- history.test.ts` و`pnpm test:e2e -- history.spec.ts`.
-- [ ] **3. التنفيذ:** استعلامات D1 مفهرسة وpagination، ونصوص عربية مباشرة للحالات والتفاصيل. التعديل يعيد المراجعة؛ تغيير الملف يعيد معالجة النسخ اللازمة فقط، وإصلاح ربط لا يعيد نشر وجهة ناجحة. تجميع refresh من الخدمة دون fetch Buffer لكل نافذة.
-- [ ] **4. تحقق وتسجيل:** نجاح الاختبارات والكيبورد للقوائم والأزرار، ثم `git commit -m "feat: manage schedules and show reliable Arabic summaries"`.
+- [x] **1. اختبارات فاشلة:** `one_post_six_targets_is_one_post`: `expect(summary.completePosts).toBe(1)` و`expect(summary.publishedTargets).toBe(6)`؛ partial/unknown ليست complete؛ حدود اليوم بحسب المنطقة؛ 409 يبقي draftId/text دون تغيير؛ cancelled ينتظر `expect(summary.upcomingScheduled).toBe(0)`؛ تبديل المساحة ينتظر `expect(items.every(p => p.workspaceId === selectedWorkspaceId)).toBe(true)`.
+- [x] **2. تشغيل الأحمر:** `pnpm --filter @mawjivo/service test -- history.test.ts` و`pnpm test:e2e -- history.spec.ts`.
+- [x] **3. التنفيذ:** استعلامات D1 مفهرسة وpagination، ونصوص عربية مباشرة للحالات والتفاصيل. التعديل يعيد المراجعة؛ تغيير الملف يعيد معالجة النسخ اللازمة فقط، وإصلاح ربط لا يعيد نشر وجهة ناجحة. تجميع refresh من الخدمة دون fetch Buffer لكل نافذة.
+- [x] **4. تحقق وتسجيل:** نجاح الاختبارات والكيبورد للقوائم والأزرار، ثم `git commit -m "feat: manage schedules and show reliable Arabic summaries"`.
 
 ### Task 13: Telegram وHealthchecks ومؤقت المراقبة
+
+**تعديل معتمد من المستخدم في 2026-10-11:** تقارير التطبيق عبر بوت المستخدم في ENV؛ تنبيهات Healthchecks المستقلة عبر تكامل البريد الموجود فقط. لا يُطلب ربط HealthchecksBot. يختبر الفشل والتعافي في فحص معزول مع قناة البريد، ويؤكد المستخدم الوصول عند التجربة النهائية.
 
 **Files:** إنشاء `apps/service/src/reports/telegram.ts`, `daily.ts`, `src/monitoring.ts`, `test/reports.test.ts`, `monitoring.test.ts`, `scripts/setup-healthchecks.mjs`, `docs/user/monitoring.md`؛ تعديل scheduled handler/config/settings/schema عند الحاجة.
 
@@ -312,4 +314,5 @@
 راجعت التغطية والواجهات وأسماء الحقول وتبعيات المهام والحالات الخمس في Review Focus. التجهيز يندمج مع ميزة تحتاجه، ولا توجد مهام لإعادة هيكلة لا تخدم التسليم. الاختبارات المعروضة تثبت السلوك المقصود؛ تفاصيل الأجسام والروتين تترك للتنفيذ.
 
 الخطة تنتظر مراجعة المستخدم واختيار طريقة التنفيذ. الاختيار المقترح **Native**: ينفذ المساعد المهام بالتتابع في هذه الجلسة، ثم مراجعة مستقلة للفرع كاملًا؛ يناسب ترابط العقود ويقلل كلفة السياقات. البديل **Subagent-driven**: منفذ جديد ومراجع مستقل لكل مهمة، ثم مراجعة للفرع؛ يمنح فحصًا مستقلًا مبكرًا بكلفة سياقات أكثر. لا يبدأ التنفيذ قبل مراجعة هذه الخطة واختيار الطريقة.
+
 
