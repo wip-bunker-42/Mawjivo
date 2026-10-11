@@ -1,0 +1,24 @@
+{
+  "target": "win32-x64",
+  "ffmpegVersion": "9.0.2-24-gfd5d616c29-mawjivo",
+  "ffmpegCommit": "fd5d616c294faef421ca1c8b28cb0f6560fd5f31",
+  "openh264Version": "2.6.0",
+  "archives": {
+    "ffmpeg": {
+      "url": "https://codeload.github.com/FFmpeg/FFmpeg/tar.gz/fd5d616c294faef421ca1c8b28cb0f6560fd5f31",
+      "sha256": "dfe281bfc7863ce1b8750f8d86964f5b5a2ec1a1c36045edb77866d4b919aa43"
+    },
+    "openh264": {
+      "url": "https://codeload.github.com/cisco/openh264/tar.gz/652bdb7719f30b52b08e506645a7322ff1b2cc6f",
+      "sha256": "7a060916a9fcb63ba51d83a4f2388660c0b58797be547c4fa5c52e8d65660a85"
+    },
+    "nasm": {
+      "url": "https://www.nasm.us/pub/nasm/releasebuilds/3.02/nasm-3.02.tar.xz",
+      "sha256": "87336eba53b4acfe917424ab5d500d2b0054d9f5148d35c2273ccf2cfb712f0d"
+    },
+    "llvm": {
+      "url": "https://github.com/mstorsjo/llvm-mingw/releases/download/20261006/llvm-mingw-20261006-ucrt-ubuntu-22.04-x86_64.tar.xz",
+      "sha256": "5f9c6ed95b2d4bdb2869a488c5fd5857fbdabcf288a0aa3eb1da43f6a08d8ab4"
+    }
+  }
+}

@@ -1,0 +1,35 @@
+name: Reproducible media tools
+on:
+  push:
+    paths: ['tools/media-build.json', 'scripts/build-media-tools.sh', '.github/workflows/media-tools.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: media-tools-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build pinned media tools and matching sources
+        run: bash scripts/build-media-tools.sh
+      - name: Preserve build diagnostics
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: media-build-diagnostics
+          path: |
+            .tools/media-build/src/ffmpeg/*/ffbuild/config.log
+            .tools/media-build/output/imports.json
+          retention-days: 2
+      - name: Return verified archives
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: media-tools
+          path: .tools/media-build/output/
+          retention-days: 7
