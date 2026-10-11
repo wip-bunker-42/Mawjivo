@@ -186,6 +186,7 @@ jobs:
         env:
           MAWJIVO_ACCEPTANCE_FIXTURE_URL: ${{ vars.MAWJIVO_ACCEPTANCE_FIXTURE_URL }}
           MAWJIVO_ACCEPTANCE_DIRECT_DRIVER: ${{ inputs.replay_run != '' }}
+          MAWJIVO_ACCEPTANCE_ATTACH_DRIVER: 'true'
         run: node scripts/accept-installed-update.mjs .tools/acceptance-base .tools/acceptance-next .tools/tauri-driver/bin/tauri-driver.exe .tools/edge-driver/msedgedriver.exe .tools/installed-acceptance
       - name: Retain concrete acceptance evidence and installers
         if: always()
@@ -201,6 +202,7 @@ jobs:
             .tools/installed-acceptance/native-diagnostics.json
             .tools/installed-acceptance/edge.log
             .tools/installed-acceptance/standalone-startup.json
+            .tools/installed-acceptance/managed-app.json
             apps/desktop/src-tauri/target/release/verify_update.exe
             apps/desktop/src-tauri/target/release/acceptance_data.exe
             apps/desktop/src-tauri/target/release/setup.exe

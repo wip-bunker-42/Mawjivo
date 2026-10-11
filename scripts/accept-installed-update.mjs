@@ -79,6 +79,9 @@ for (const stream of [driver.stdout, driver.stderr])
   });
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 let session;
+let managedApp;
+let appOutput = '';
+const attachDriver = process.env.MAWJIVO_ACCEPTANCE_ATTACH_DRIVER === 'true';
 async function request(path, method = 'GET', body) {
   let response;
   try {
@@ -110,15 +113,53 @@ async function waitFor(operation, timeout = 45000) {
   throw last ?? new Error('Acceptance timeout');
 }
 async function open() {
+  if (attachDriver) {
+    managedApp = spawn(app, [], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      windowsHide: true,
+      env: {
+        ...process.env,
+        TAURI_AUTOMATION: 'true',
+        TAURI_WEBVIEW_AUTOMATION: 'true',
+        WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS:
+          '--remote-debugging-port=9222 --remote-debugging-address=127.0.0.1',
+      },
+    });
+    for (const stream of [managedApp.stdout, managedApp.stderr])
+      stream.on('data', (chunk) => {
+        appOutput = (appOutput + chunk).slice(-24000);
+      });
+    managedApp.on('error', (error) => {
+      appOutput += '\nSpawn: ' + error.message;
+    });
+    await waitFor(async () => {
+      if (managedApp.exitCode !== null)
+        throw new Error('Installed app exited: ' + managedApp.exitCode);
+      const response = await fetch('http://127.0.0.1:9222/json/version', {
+        signal: AbortSignal.timeout(2000),
+      });
+      const browser = await response.json();
+      assert.ok(
+        response.ok && browser.webSocketDebuggerUrl,
+        'Installed WebView debugging endpoint not ready',
+      );
+    });
+  }
   const value = await request('/session', 'POST', {
     capabilities: {
-      alwaysMatch: directDriver
+      alwaysMatch: attachDriver
         ? {
             'ms:edgeChromium': true,
             browserName: 'webview2',
-            'ms:edgeOptions': { binary: app, args: [] },
+            'ms:edgeOptions': { debuggerAddress: '127.0.0.1:9222' },
           }
-        : { 'tauri:options': { application: app } },
+        : directDriver
+          ? {
+              'ms:edgeChromium': true,
+              browserName: 'webview2',
+              'ms:edgeOptions': { binary: app, args: [] },
+            }
+          : { 'tauri:options': { application: app } },
     },
   });
   session = value.sessionId;
@@ -251,6 +292,11 @@ try {
     { encoding: 'utf8', windowsHide: true, timeout: 15000 },
   );
   await writeFile(join(output, 'native-diagnostics.json'), diagnostics.stdout || '{}');
+  if (managedApp)
+    await writeFile(
+      join(output, 'managed-app.json'),
+      JSON.stringify({ exitCode: managedApp.exitCode, output: appOutput }, null, 2) + '\n',
+    );
   if (directDriver && !session) {
     const standalone = spawn(app, [], {
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -284,5 +330,6 @@ try {
 } finally {
   if (session) await request(`/session/${session}`, 'DELETE').catch(() => {});
   driver.kill();
+  managedApp?.kill();
   await writeFile(join(output, 'driver.log'), driverLog);
 }
