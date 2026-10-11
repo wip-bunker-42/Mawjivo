@@ -112,3 +112,88 @@ test('late_file_selection_cannot_attach_to_another_workspace', async ({ page }) 
     ),
   ).toBe(0);
 });
+
+test('platform_alt_defaults_match_the_description_shown_for_that_platform', async ({ page }) => {
+  await composerFixture(page);
+  await page.goto('/');
+  await page.getByLabel('النص أو الوصف', { exact: true }).fill('وصف مشترك');
+  await page.getByRole('button', { name: 'اختيار صور أو فيديو' }).click();
+  await page.getByText('تخصيص X', { exact: true }).click();
+  await page.getByLabel('نص X', { exact: true }).fill('وصف منصة X');
+  await expect(page.getByLabel('النص البديل X للصورة 1')).toHaveValue('وصف منصة X');
+  await page.getByRole('button', { name: 'مراجعة النشر' }).click();
+  await expect(page.getByRole('dialog')).toContainText('وصف منصة X');
+});
+
+test('failed_local_preparation_can_be_retried_without_resuming_an_unknown_upload', async ({
+  page,
+}) => {
+  await composerFixture(page, { prepareFailureOnce: true });
+  await page.goto('/');
+  await page.getByLabel('النص أو الوصف', { exact: true }).fill('وصف');
+  await page.getByRole('button', { name: 'اختيار صور أو فيديو' }).click();
+  await page.getByRole('button', { name: 'استئناف رفع صورتي.PNG' }).click();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (globalThis as any).__MAWJIVO_TEST__.calls.filter(
+            (c: any) => c.command === 'prepare_media',
+          ).length,
+      ),
+    )
+    .toBe(2);
+  expect(
+    await page.evaluate(() =>
+      (globalThis as any).__MAWJIVO_TEST__.calls.some(
+        (c: any) => c.command === 'resume_upload' && c.args.jobId.startsWith('local-'),
+      ),
+    ),
+  ).toBe(false);
+});
+
+test('source_restore_failure_is_visible_and_keeps_confirmation_unavailable', async ({ page }) => {
+  await composerFixture(page, { restoreError: true });
+  await page.goto('/');
+  await expect(page.getByText('تغير الملف بعد اختياره؛ اختره مجددًا.')).toBeVisible();
+  await page.getByRole('button', { name: 'مراجعة النشر' }).click();
+  await expect(page.getByRole('button', { name: 'موافق، انشر' })).toBeDisabled();
+});
+
+test('image_order_moves_the_corresponding_alt_text_and_chain_parts_are_editable', async ({
+  page,
+}) => {
+  await composerFixture(page, { images: 2 });
+  await page.goto('/');
+  await page.getByLabel('النص أو الوصف', { exact: true }).fill('أ'.repeat(400));
+  await page.getByRole('button', { name: 'اختيار صور أو فيديو' }).click();
+  await expect(page.getByRole('button', { name: 'نقل الصورة-2.PNG لأعلى' })).toBeVisible();
+  await page.getByText('تخصيص X', { exact: true }).click();
+  await page.getByLabel('النص البديل X للصورة 1').fill('بديل الصورة الأولى');
+  await page.getByLabel('النص البديل X للصورة 2').fill('بديل الصورة الثانية');
+  await page.getByRole('button', { name: 'نقل الصورة-2.PNG لأعلى' }).click();
+  await expect(page.getByLabel('النص البديل X للصورة 1')).toHaveValue('بديل الصورة الثانية');
+  await page.getByRole('checkbox', { name: 'نشر سلسلة متصلة على X' }).check();
+  await page.getByRole('button', { name: 'تقسيم النص تلقائيًا لـX' }).click();
+  await expect(page.getByLabel('جزء 1 من سلسلة X')).toHaveValue('أ'.repeat(280));
+  await expect(page.getByLabel('جزء 2 من سلسلة X')).toHaveValue('أ'.repeat(120));
+  await page.getByLabel('جزء 2 من سلسلة X').fill('الجزء المعدل');
+  await page.getByRole('button', { name: 'نقل جزء 2 من X لأعلى' }).click();
+  await expect(page.getByLabel('جزء 1 من سلسلة X')).toHaveValue('الجزء المعدل');
+  await page.getByRole('button', { name: 'مراجعة النشر' }).click();
+  await page.evaluate(() => {
+    (globalThis as any).__MAWJIVO_TEST__.finish();
+  });
+  await expect(page.getByRole('button', { name: 'موافق، انشر' })).toBeEnabled();
+  await page.getByRole('button', { name: 'موافق، انشر' }).click();
+  const plan = await page.evaluate(
+    () =>
+      (globalThis as any).__MAWJIVO_TEST__.calls.find(
+        (c: any) => c.command === 'service_request' && c.args.method === 'POST',
+      ).args.body.plan,
+  );
+  const target = plan.targets.find((t: any) => t.platform === 'x');
+  expect(target.assets.map((a: any) => a.sourceAssetId)).toEqual(['file-2', 'file-1']);
+  expect(target.altTexts).toEqual(['بديل الصورة الثانية', 'بديل الصورة الأولى']);
+  expect(target.threadParts[0]).toBe('الجزء المعدل');
+});

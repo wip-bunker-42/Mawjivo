@@ -452,10 +452,10 @@ pub async fn prepare_media(
         let directory = task_state.directory.join(uuid::Uuid::new_v4().to_string());
         std::fs::create_dir_all(&directory)
             .map_err(|_| AppError::new("LOCAL_DISK_FULL", "تعذر إنشاء مجلد المعالجة."))?;
-        let extension = if recipe.output_mime_type == "image/jpeg" {
-            "jpg"
-        } else {
-            "mp4"
+        let extension = match recipe.output_mime_type.as_str() {
+            "image/jpeg" => "jpg",
+            "image/png" => "png",
+            _ => "mp4",
         };
         let mut output = directory.join(
             path.file_name()

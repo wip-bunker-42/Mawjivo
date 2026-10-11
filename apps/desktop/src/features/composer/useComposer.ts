@@ -310,6 +310,7 @@ export function useComposer(workspace: Workspace) {
             label: job.recipeId ? 'نسخة مهيأة من ' + source.originalName : source.originalName,
             elapsedMs: 0,
             remainingMs: null,
+            phase: 'pending',
           });
           await resumeUpload(job.jobId);
           await ready(selected, selected.jobs.get(jobKey(job.sourceAssetId, job.recipeId))!);
@@ -445,6 +446,26 @@ export function useComposer(workspace: Workspace) {
     if (!session) return;
     try {
       job.ready = undefined;
+      if (job.jobId.startsWith('local-')) {
+        const source = session.draft.assets.find((asset) => asset.id === job.sourceAssetId);
+        if (!source) return;
+        const recipe = job.recipeId
+          ? buildPlan(session.draft, session.caps, new Date().toISOString()).mediaRecipes.find(
+              (item) => item.id === job.recipeId,
+            )
+          : null;
+        session.jobs.delete(job.key);
+        if (job.recipeId && !recipe) {
+          variants(session);
+          repaint(session);
+          return;
+        }
+        await upload(session, source, source.id, recipe ?? null);
+        return;
+      }
+      job.phase = 'pending';
+      job.error = null;
+      repaint(session);
       await resumeUpload(job.jobId);
       await ready(session, job);
     } catch (error) {
@@ -567,7 +588,7 @@ export function useComposer(workspace: Workspace) {
     draft: session?.draft ?? null,
     caps: session?.caps ?? null,
     jobs: session ? [...session.jobs.values()] : [],
-    message: session?.message ?? loadError,
+    message: session?.message || loadError,
     loading,
     localSchedule: session?.localSchedule ?? '',
     review,

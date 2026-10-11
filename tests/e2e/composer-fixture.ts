@@ -1,7 +1,14 @@
 import type { Page } from '@playwright/test';
 export async function composerFixture(
   page: Page,
-  options: { media?: 'image' | 'video'; windowId?: string; deferredPick?: boolean } = {},
+  options: {
+    media?: 'image' | 'video';
+    windowId?: string;
+    deferredPick?: boolean;
+    images?: number;
+    prepareFailureOnce?: boolean;
+    restoreError?: boolean;
+  } = {},
 ): Promise<void> {
   await page.addInitScript((options) => {
     const windowId = options.windowId ?? 'main';
@@ -71,6 +78,34 @@ export async function composerFixture(
         height: 1920,
         ...(kind === 'video' ? { durationMs: 220000 } : {}),
       };
+    const sources = Array.from({ length: options.images ?? 1 }, (_, index) => ({
+      ...source,
+      id: 'file-' + (index + 1),
+      originalName: index ? 'الصورة-' + (index + 1) + '.PNG' : source.originalName,
+    }));
+    const selectedFiles = sources.map((item) => ({
+      fileId: item.id,
+      originalName: item.originalName,
+      bytes: item.bytes,
+      mimeType: item.mimeType,
+    }));
+    if (options.restoreError)
+      drafts.set('space-a', {
+        id: 'saved-draft',
+        workspaceId: 'space-a',
+        workspaceVersion: 1,
+        revision: 1,
+        createdAt: new Date().toISOString(),
+        timeZone: 'Africa/Cairo',
+        text: 'مسودة محفوظة',
+        title: '',
+        assets: sources,
+        selections: ['ch-x'],
+        overrides: {},
+        scheduleLocal: null,
+        scheduleOffset: null,
+      });
+    let preparationFailed = false;
     const emit = (event: string, payload: unknown) => {
       for (const id of listeners.get(event) ?? []) callbacks.get(id)?.({ event, id, payload });
     };
@@ -157,20 +192,21 @@ export async function composerFixture(
               ? new Promise((resolve) => {
                   resolvePick = resolve;
                 })
-              : [
-                  {
-                    fileId: source.id,
-                    originalName: source.originalName,
-                    bytes: source.bytes,
-                    mimeType: source.mimeType,
-                  },
-                ];
-          if (command === 'probe_media') return source;
+              : selectedFiles;
+          if (command === 'probe_media') return sources.find((item) => item.id === args!.fileId);
           if (command === 'prepare_media') {
+            if (options.prepareFailureOnce && !preparationFailed) {
+              preparationFailed = true;
+              throw {
+                code: 'LOCAL_DISK_FULL',
+                messageAr: 'المساحة المحلية لا تكفي لمعالجة هذا الملف.',
+                retryable: true,
+              };
+            }
             const recipe = args!.recipe as any;
             return {
               fileId: 'derived-' + crypto.randomUUID(),
-              sourceAssetId: source.id,
+              sourceAssetId: recipe.sourceAssetId,
               recipeId: recipe.id,
               mimeType: recipe.outputMimeType,
               bytes: 1800,
@@ -194,7 +230,13 @@ export async function composerFixture(
           }
           if (command === 'uploaded_asset') return jobs.get(String(args!.jobId))?.ready ?? null;
           if (command === 'list_uploads' || command === 'restore_uploads')
-            return [...jobs.values()];
+            if (options.restoreError)
+              throw {
+                code: 'SOURCE_CHANGED',
+                messageAr: 'تغير الملف بعد اختياره؛ اختره مجددًا.',
+                retryable: false,
+              };
+            else return [...jobs.values()];
           if (
             command === 'resume_upload' ||
             command === 'cancel_upload' ||

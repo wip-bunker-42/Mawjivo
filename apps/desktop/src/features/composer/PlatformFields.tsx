@@ -15,7 +15,8 @@ export function PlatformFields({
   const platform = channel.platform,
     name = platformNames[platform],
     override = draft.overrides[platform],
-    parts = override?.threadParts ?? [];
+    parts = override?.threadParts ?? [],
+    defaultAlt = parts[0] ?? override?.text ?? draft.text;
   function setPart(index: number, text: string): void {
     onChange({ threadParts: parts.map((part, i) => (i === index ? text : part)) });
   }
@@ -26,7 +27,7 @@ export function PlatformFields({
     onChange({ threadParts: next });
   }
   function alt(index: number, value: string): void {
-    const next = draft.assets.map((_, i) => override?.altTexts?.[i] ?? draft.text);
+    const next = draft.assets.map((_, i) => override?.altTexts?.[i] ?? defaultAlt);
     next[index] = value;
     onChange({ altTexts: next });
   }
@@ -54,7 +55,7 @@ export function PlatformFields({
             <textarea
               id={'alt-' + channel.id + '-' + asset.id}
               rows={2}
-              value={override?.altTexts?.[index] ?? draft.text}
+              value={override?.altTexts?.[index] ?? defaultAlt}
               onChange={(e) => alt(index, e.target.value)}
             />
           </div>
