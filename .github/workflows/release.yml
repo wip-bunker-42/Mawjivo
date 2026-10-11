@@ -158,14 +158,24 @@ jobs:
           if ($taskProcess.ExitCode -ne 0) { throw 'Signed reference install failed.' }
           "MAWJIVO_ACCEPTANCE_REFERENCE_BINARY=$taskReference/mawjivo.exe" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           Write-Output 'Diagnostic replay only: evidence remains bound to the original installer source commit.'
+      - name: Install current stable Microsoft WebView2 Runtime
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri 'https://go.microsoft.com/fwlink/p/?LinkId=2124703' -OutFile .tools/webview2-bootstrapper.exe
+          $taskSignature = Get-AuthenticodeSignature -LiteralPath .tools/webview2-bootstrapper.exe
+          if ($taskSignature.Status -ne 'Valid' -or $taskSignature.SignerCertificate.Subject -notmatch 'CN=Microsoft Corporation(?:,|$)') { throw 'Microsoft runtime installer signature invalid.' }
+          $taskInstall = Start-Process -FilePath (Resolve-Path -LiteralPath .tools/webview2-bootstrapper.exe).Path -ArgumentList @('/silent','/install') -Wait -PassThru -WindowStyle Hidden
+          if ($taskInstall.ExitCode -ne 0) { throw "WebView2 runtime installation failed: $($taskInstall.ExitCode)" }
       - name: Install matching Edge WebDriver
         shell: pwsh
         run: |
-          $taskRuntimeRoot = Join-Path ${env:ProgramFiles(x86)} 'Microsoft/EdgeWebView/Application'
-          $taskRuntime = Get-ChildItem -LiteralPath $taskRuntimeRoot -Directory | Where-Object { $_.Name -match '^\d+\.\d+\.\d+\.\d+$' -and (Test-Path -LiteralPath (Join-Path $_.FullName 'msedgewebview2.exe')) } | Sort-Object { [version]$_.Name } -Descending | Select-Object -First 1
+          $taskRuntimeRoots = @((Join-Path ${env:ProgramFiles(x86)} 'Microsoft/EdgeWebView/Application'),(Join-Path $env:LOCALAPPDATA 'Microsoft/EdgeWebView/Application')) | Where-Object { Test-Path -LiteralPath $_ }
+          $taskRuntime = $taskRuntimeRoots | ForEach-Object { Get-ChildItem -LiteralPath $_ -Directory } | Where-Object { $_.Name -match '^\d+\.\d+\.\d+\.\d+$' -and (Test-Path -LiteralPath (Join-Path $_.FullName 'msedgewebview2.exe')) } | Sort-Object { [version]$_.Name } -Descending | Select-Object -First 1
           if (!$taskRuntime) { throw 'WebView2 runtime unavailable.' }
           $taskVersion = (Get-Item -LiteralPath (Join-Path $taskRuntime.FullName 'msedgewebview2.exe')).VersionInfo.ProductVersion
           if ($taskVersion -notmatch '^\d+\.\d+\.\d+\.\d+$') { throw 'Edge version unavailable.' }
+          "WEBVIEW2_BROWSER_EXECUTABLE_FOLDER=$($taskRuntime.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          Write-Output "Verified runtime and matching driver version: $taskVersion"
           New-Item -ItemType Directory -Force .tools/edge-driver | Out-Null
           Invoke-WebRequest -Uri "https://msedgedriver.microsoft.com/$taskVersion/edgedriver_win64.zip" -OutFile .tools/edge-driver.zip
           Expand-Archive -LiteralPath .tools/edge-driver.zip -DestinationPath .tools/edge-driver -Force
