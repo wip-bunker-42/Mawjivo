@@ -13,7 +13,7 @@ import type {
   PostPlan,
   TargetPlan,
 } from './contracts';
-export const POLICY_VERSION = '2026-10-10.1';
+export const POLICY_VERSION = '2026-10-11.1';
 const segmenter = new Intl.Segmenter('ar', { granularity: 'grapheme' });
 const names = {
   facebook: 'Facebook',
@@ -82,13 +82,17 @@ function makeRecipe(asset: MediaAsset, limits: MediaLimits): MediaRecipe | null 
   const outputMimeType =
     asset.kind === 'video' && limits.mimeTypes.includes('video/mp4')
       ? 'video/mp4'
-      : mimeMatches
-        ? asset.mimeType
-        : limits.mimeTypes.includes(asset.kind === 'image' ? 'image/jpeg' : 'video/mp4')
-          ? asset.kind === 'image'
-            ? 'image/jpeg'
-            : 'video/mp4'
-          : limits.mimeTypes[0]!;
+      : asset.kind === 'image' &&
+          !['image/jpeg', 'image/png'].includes(asset.mimeType) &&
+          limits.mimeTypes.includes('image/jpeg')
+        ? 'image/jpeg'
+        : mimeMatches
+          ? asset.mimeType
+          : limits.mimeTypes.includes(asset.kind === 'image' ? 'image/jpeg' : 'video/mp4')
+            ? asset.kind === 'image'
+              ? 'image/jpeg'
+              : 'video/mp4'
+            : limits.mimeTypes[0]!;
   const body: Omit<MediaRecipe, 'id'> = {
     sourceAssetId: asset.id,
     outputMimeType,

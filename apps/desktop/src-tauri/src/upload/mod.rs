@@ -111,7 +111,9 @@ impl UploadEngine {
         if sources.len() > 20 {
             return Err(AppError::new("MEDIA_COUNT", "يمكن استعادة حتى 20 ملفًا."));
         }
-        let sessions = self.store.list_sources(owner, profile, workspace, sources)?;
+        let sessions = self
+            .store
+            .list_sources(owner, profile, workspace, sources)?;
         for session in &sessions {
             session.check_source()?;
             registry.restore(owner, &session.input, &session.path)?;

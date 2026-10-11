@@ -3,7 +3,7 @@ use crate::contracts::{AppError, MediaRecipe};
 use image::{
     DynamicImage, ImageDecoder, ImageEncoder, ImageReader, Rgb, RgbImage, Rgba, RgbaImage,
     codecs::jpeg::JpegEncoder,
-    codecs::png::{PngEncoder, CompressionType, FilterType as PngFilterType},
+    codecs::png::{CompressionType, FilterType as PngFilterType, PngEncoder},
     imageops::{self, FilterType},
 };
 use std::{
@@ -326,34 +326,74 @@ fn prepare_image(
         "حجم الصورة لا يلائم حد المنصة حتى بعد التحويل.",
     ))
 }
-fn prepare_png(request: &TransformRequest<'_>, metadata: &MediaInfo) -> Result<MediaInfo, AppError> {
+fn prepare_png(
+    request: &TransformRequest<'_>,
+    metadata: &MediaInfo,
+) -> Result<MediaInfo, AppError> {
     let (decoded, icc) = load_image(request.source)?;
     cancelled(&request.cancel)?;
     let (width, height) = canvas(metadata.width, metadata.height, request.recipe, false)?;
     let rgba = decoded.to_rgba8();
-    let scale = (f64::from(width) / f64::from(rgba.width())).min(f64::from(height) / f64::from(rgba.height()));
-    let resized = imageops::resize(&rgba,
+    let scale = (f64::from(width) / f64::from(rgba.width()))
+        .min(f64::from(height) / f64::from(rgba.height()));
+    let resized = imageops::resize(
+        &rgba,
         (f64::from(rgba.width()) * scale).round().max(1.0) as u32,
-        (f64::from(rgba.height()) * scale).round().max(1.0) as u32, FilterType::Lanczos3);
+        (f64::from(rgba.height()) * scale).round().max(1.0) as u32,
+        FilterType::Lanczos3,
+    );
     let mut output_image = RgbaImage::from_pixel(width, height, Rgba([0; 4]));
-    imageops::overlay(&mut output_image, &resized,
-        i64::from((width - resized.width()) / 2), i64::from((height - resized.height()) / 2));
+    imageops::overlay(
+        &mut output_image,
+        &resized,
+        i64::from((width - resized.width()) / 2),
+        i64::from((height - resized.height()) / 2),
+    );
     let mut bytes = Vec::new();
-    let mut encoder = PngEncoder::new_with_quality(&mut bytes, CompressionType::Best, PngFilterType::Adaptive);
+    let mut encoder =
+        PngEncoder::new_with_quality(&mut bytes, CompressionType::Best, PngFilterType::Adaptive);
     if let Some(profile) = icc {
-        encoder.set_icc_profile(profile).map_err(|_| AppError::new("MEDIA_COLOR", "تعذر الاحتفاظ بألوان الصورة."))?;
+        encoder
+            .set_icc_profile(profile)
+            .map_err(|_| AppError::new("MEDIA_COLOR", "تعذر الاحتفاظ بألوان الصورة."))?;
     }
-    encoder.write_image(output_image.as_raw(), width, height, image::ExtendedColorType::Rgba8)
+    encoder
+        .write_image(
+            output_image.as_raw(),
+            width,
+            height,
+            image::ExtendedColorType::Rgba8,
+        )
         .map_err(|_| AppError::new("MEDIA_IMAGE", "تعذر حفظ نسخة PNG من الصورة."))?;
     cancelled(&request.cancel)?;
     if bytes.len() as u64 > request.recipe.max_bytes.unwrap_or(9_000_000_000) {
-        return Err(AppError::new("MEDIA_LIMIT", "حجم نسخة PNG يتجاوز حد المنصة. اختر صورة أصغر."));
+        return Err(AppError::new(
+            "MEDIA_LIMIT",
+            "حجم نسخة PNG يتجاوز حد المنصة. اختر صورة أصغر.",
+        ));
     }
-    let mut output = OpenOptions::new().write(true).truncate(true).open(request.output)
+    let mut output = OpenOptions::new()
+        .write(true)
+        .truncate(true)
+        .open(request.output)
         .map_err(|_| AppError::new("MEDIA_OUTPUT", "تعذر إنشاء الصورة المعالجة."))?;
-    output.write_all(&bytes).and_then(|_| output.sync_all())
-        .map_err(|_| AppError::new("LOCAL_DISK_FULL", "تعذر حفظ الصورة؛ تحقق من المساحة المحلية."))?;
-    Ok(MediaInfo { mime_type: "image/png".into(), bytes: bytes.len() as u64, width, height, duration_ms: None, quality: None })
+    output
+        .write_all(&bytes)
+        .and_then(|_| output.sync_all())
+        .map_err(|_| {
+            AppError::new(
+                "LOCAL_DISK_FULL",
+                "تعذر حفظ الصورة؛ تحقق من المساحة المحلية.",
+            )
+        })?;
+    Ok(MediaInfo {
+        mime_type: "image/png".into(),
+        bytes: bytes.len() as u64,
+        width,
+        height,
+        duration_ms: None,
+        quality: None,
+    })
 }
 fn prepare_video(
     tools: &MediaTools,

@@ -159,8 +159,38 @@ describe('publication plans', () => {
   });
 });
 test('local_clipping_of_a_supported_mov_requests_the_bundled_mp4_encoder', () => {
- const capabilities=caps();
- capabilities.channels.find(c=>c.platform==='x')!.limits.video!.mimeTypes.push('video/quicktime');
- const plan=buildPlan(draft({title:'عنوان',assets:[{...video(),mimeType:'video/quicktime',originalName:'الأصل.mov'}],selections:['x']}),capabilities,now);
- expect(plan.mediaRecipes[0]?.outputMimeType).toBe('video/mp4');
+  const capabilities = caps();
+  capabilities.channels
+    .find((c) => c.platform === 'x')!
+    .limits.video!.mimeTypes.push('video/quicktime');
+  const plan = buildPlan(
+    draft({
+      title: 'عنوان',
+      assets: [{ ...video(), mimeType: 'video/quicktime', originalName: 'الأصل.mov' }],
+      selections: ['x'],
+    }),
+    capabilities,
+    now,
+  );
+  expect(plan.mediaRecipes[0]?.outputMimeType).toBe('video/mp4');
 });
+
+test.each(['image/webp', 'image/gif'])(
+  'processing %s selects an available image encoder and explains the conversion',
+  (mimeType) => {
+    const capabilities = caps();
+    const imageLimits = capabilities.channels.find((channel) => channel.platform === 'x')!.limits
+      .image!;
+    imageLimits.mimeTypes.push(mimeType);
+    imageLimits.maxWidth = 1000;
+    const source = { ...photo(), mimeType };
+    const plan = buildPlan(draft({ assets: [source], selections: ['x'] }), capabilities, now);
+    expect(plan.mediaRecipes[0]?.outputMimeType).toBe('image/jpeg');
+    expect(
+      plan.notes.some((note) => note.code === 'MEDIA_CONVERTED' && note.facts.to === 'image/jpeg'),
+    ).toBe(true);
+    delete imageLimits.maxWidth;
+    const unchanged = buildPlan(draft({ assets: [source], selections: ['x'] }), capabilities, now);
+    expect(unchanged.mediaRecipes).toEqual([]);
+  },
+);
