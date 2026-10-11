@@ -51,6 +51,23 @@ use std::sync::{
     atomic::{AtomicUsize, Ordering},
 };
 
+#[tokio::test]
+async fn install_waits_for_all_windows_and_refuses_unsaved_drafts() {
+    use mawjivo_lib::updates::DraftFlush;
+    let flush = DraftFlush::default();
+    let ticket = flush.begin(vec!["main".into(), "composer-2".into()]).unwrap();
+    flush.acknowledge("main", &ticket.id, true).unwrap();
+    assert_eq!(tokio::time::timeout(std::time::Duration::from_millis(20), ticket.wait()).await.unwrap_err().to_string(), "deadline has elapsed");
+    flush.acknowledge("composer-2", &ticket.id, false).unwrap();
+    assert_eq!(ticket.wait().await.unwrap_err().code, "UPDATE_DRAFT_SAVE");
+    drop(ticket);
+    let retry = flush.begin(vec!["main".into(), "composer-2".into()]).unwrap();
+    assert_eq!(flush.acknowledge("foreign", &retry.id, true).unwrap_err().code, "INVALID_WINDOW");
+    flush.acknowledge("main", &retry.id, true).unwrap();
+    flush.acknowledge("composer-2", &retry.id, true).unwrap();
+    retry.wait().await.unwrap();
+}
+
 #[derive(Clone)]
 struct TestUpdater {
     bad_signature: bool,

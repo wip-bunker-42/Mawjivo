@@ -3,6 +3,19 @@ use async_trait::async_trait;
 use std::sync::{Arc, Mutex, MutexGuard};
 pub mod tauri_backend;
 
+#[derive(Clone, Default)]
+pub struct DraftFlush;
+pub struct FlushTicket { pub id: String }
+impl DraftFlush {
+    pub fn begin(&self, _windows: Vec<String>) -> Result<FlushTicket, AppError> {
+        Ok(FlushTicket { id: uuid::Uuid::new_v4().to_string() })
+    }
+    pub fn acknowledge(&self, _owner: &str, _id: &str, _saved: bool) -> Result<(), AppError> { Ok(()) }
+}
+impl FlushTicket {
+    pub async fn wait(&self) -> Result<(), AppError> { Ok(()) }
+}
+
 pub const MAX_UPDATE_BYTES: u64 = 512 * 1_048_576;
 pub fn verify_signed_release(
     bytes: &[u8],

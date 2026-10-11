@@ -13,7 +13,10 @@ test('upgrades only the selected user service after an explicit action', async (
   await expect(page.getByText('تم تحديث الخدمة. مساحاتك ومنشوراتك المجدولة محفوظة.')).toBeVisible();
   await expect(upgrade).toBeFocused();
   expect((await calls()).filter((call: any) => call.command === 'upgrade_service')).toEqual([
-    { command: 'upgrade_service', args: { profileId: 'profile-1', packageId: 'synthetic-service-package' } },
+    {
+      command: 'upgrade_service',
+      args: { profileId: 'profile-1', packageId: 'synthetic-service-package' },
+    },
   ]);
   await expect(page.getByLabel('مساحة العمل', { exact: true })).toHaveValue('space-a');
 });

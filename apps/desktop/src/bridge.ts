@@ -85,6 +85,13 @@ export interface UpdateProgress {
 export const checkUpdate = () => native<UpdateInfo | null>('check_update');
 export const downloadUpdate = (updateId: string) => native<void>('download_update', { updateId });
 export const installUpdate = (updateId: string) => native<void>('install_update', { updateId });
+export interface ServicePackageInfo {
+  id: string;
+  version: string;
+}
+export const servicePackageInfo = () => native<ServicePackageInfo>('service_package_info');
+export const upgradeService = (profileId: string, packageId: string) =>
+  native<ServiceProfile>('upgrade_service', { profileId, packageId });
 export function onUpdateProgress(
   callback: (progress: UpdateProgress) => void,
 ): Promise<() => void> {

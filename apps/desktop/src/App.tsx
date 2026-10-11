@@ -149,7 +149,14 @@ export function App(): ReactElement {
                 onSaved={savedWorkspace}
               />
             ) : settingsPage === 'updates' ? (
-              <UpdatesPage />
+              <UpdatesPage
+                profiles={profiles}
+                onUpgraded={(item) =>
+                  setProfiles((current) =>
+                    current.map((profile) => (profile.id === item.id ? item : profile)),
+                  )
+                }
+              />
             ) : settingsPage === 'telegram' ? (
               <TelegramPage key={workspace?.id ?? 'new'} workspace={workspace} />
             ) : (

@@ -6,10 +6,18 @@ import {
   installUpdate,
   onUpdateProgress,
   errorMessage,
+  servicePackageInfo,
+  upgradeService,
 } from '../../bridge';
-import type { UpdateInfo, UpdateProgress } from '../../bridge';
+import type { UpdateInfo, UpdateProgress, ServiceProfile, ServicePackageInfo } from '../../bridge';
 
-export function UpdatesPage(): ReactElement {
+export function UpdatesPage({
+  profiles,
+  onUpgraded,
+}: {
+  profiles: ServiceProfile[];
+  onUpgraded: (profile: ServiceProfile) => void;
+}): ReactElement {
   const [offer, setOffer] = useState<UpdateInfo | null>(null);
   const [message, setMessage] = useState('');
   const [phase, setPhase] = useState<
@@ -17,6 +25,23 @@ export function UpdatesPage(): ReactElement {
   >('idle');
   const [progress, setProgress] = useState<UpdateProgress | null>(null);
   const busy = useRef(false);
+  const [packageInfo, setPackageInfo] = useState<ServicePackageInfo | null>(null);
+  const [selectedProfile, setSelectedProfile] = useState(profiles[0]?.id ?? '');
+  const [serviceMessage, setServiceMessage] = useState('');
+  const [upgrading, setUpgrading] = useState(false);
+  useEffect(() => {
+    let active = true;
+    void servicePackageInfo()
+      .then((value) => {
+        if (active) setPackageInfo(value);
+      })
+      .catch((error) => {
+        if (active) setServiceMessage(errorMessage(error));
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
   const locked = phase === 'checking' || phase === 'downloading' || phase === 'installing';
   useEffect(() => {
     let active = true;
@@ -82,11 +107,26 @@ export function UpdatesPage(): ReactElement {
       busy.current = false;
     }
   }
+  async function upgrade(): Promise<void> {
+    if (busy.current || !packageInfo || !selectedProfile) return;
+    busy.current = true;
+    setUpgrading(true);
+    setServiceMessage('جارٍ فحص الخدمة وتحديثها…');
+    try {
+      onUpgraded(await upgradeService(selectedProfile, packageInfo.id));
+      setServiceMessage('تم تحديث الخدمة. مساحاتك ومنشوراتك المجدولة محفوظة.');
+    } catch (error) {
+      setServiceMessage(errorMessage(error));
+    } finally {
+      busy.current = false;
+      setUpgrading(false);
+    }
+  }
   return (
     <section aria-labelledby="updates-heading">
       <h3 id="updates-heading">تحديث Mawjivo</h3>
       <p>يفحص التطبيق التحديثات عند طلبك. تُحفظ مساحاتك ومسوداتك عند الترقية.</p>
-      <button type="button" aria-disabled={locked} onClick={() => void check()}>
+      <button type="button" aria-disabled={locked || upgrading} onClick={() => void check()}>
         فحص التحديثات
       </button>
       {offer && (
@@ -128,6 +168,31 @@ export function UpdatesPage(): ReactElement {
         </div>
       )}
       {message && <p className="operation-message">{message}</p>}
+      <section aria-labelledby="service-update-heading">
+        <h4 id="service-update-heading">تحديث خدمة Cloudflare</h4>
+        <p>يحدّث الخدمة بالحزمة المضمنة في التطبيق ويحافظ على حساباتك ومواعيد النشر.</p>
+        <label htmlFor="service-upgrade-profile">خدمة Cloudflare المراد تحديثها</label>
+        <select
+          id="service-upgrade-profile"
+          value={selectedProfile}
+          disabled={locked || upgrading}
+          onChange={(event) => setSelectedProfile(event.target.value)}
+        >
+          {profiles.map((profile) => (
+            <option key={profile.id} value={profile.id}>
+              {profile.baseUrl}
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          aria-disabled={locked || upgrading || !packageInfo || !selectedProfile}
+          onClick={() => void upgrade()}
+        >
+          تحديث خدمة Cloudflare
+        </button>
+        {serviceMessage && <p className="operation-message">{serviceMessage}</p>}
+      </section>
     </section>
   );
 }
