@@ -25,6 +25,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Require successful verification of this commit
+        if: inputs.replay_run == ''
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
@@ -45,6 +46,7 @@ jobs:
           rustup toolchain install 1.99.0 --profile minimal
           exit $LASTEXITCODE
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        id: native-cache
         with:
           path: |
             ~/.cargo/registry
@@ -105,6 +107,15 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node scripts/verify-release.mjs .tools/acceptance-next test
           exit $LASTEXITCODE
+      - name: Retain successfully built release inputs before runtime acceptance
+        if: inputs.replay_run == '' && steps.native-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            apps/desktop/src-tauri/target
+            .tools/tauri-driver
+          key: mawjivo-windows-release-1.99-${{ hashFiles('apps/desktop/src-tauri/Cargo.lock') }}
       - name: Publish only the verified test-channel installer
         if: inputs.replay_run == ''
         shell: pwsh
@@ -123,6 +134,8 @@ jobs:
           if ($env:MAWJIVO_REPLAY_RUN -notmatch '^\d+$') { throw 'Invalid diagnostic run id.' }
           $taskSource = gh run view $env:MAWJIVO_REPLAY_RUN --json workflowName,headSha,status | ConvertFrom-Json
           if ($LASTEXITCODE -ne 0 -or $taskSource.workflowName -ne 'Windows signed update acceptance' -or $taskSource.status -ne 'completed') { throw 'Only a completed acceptance run in this repository can be replayed.' }
+          $taskVerifiedSource = gh run list --workflow ci.yml --commit $taskSource.headSha --limit 1 --json conclusion | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0 -or $taskVerifiedSource.Count -ne 1 -or $taskVerifiedSource[0].conclusion -ne 'success') { throw 'Original signed installer source must have passed full verification.' }
           gh run download $env:MAWJIVO_REPLAY_RUN --name windows-signed-acceptance --dir .tools/replay
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Copy-Item -LiteralPath .tools/replay/.tools/acceptance-base -Destination .tools/acceptance-base -Recurse
