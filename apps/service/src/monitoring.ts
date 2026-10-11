@@ -58,7 +58,7 @@ async function recoverProgress(now: number, env: Env): Promise<boolean> {
     }
     // A stopped write cannot be proven rejected. Never turn it back into a new write.
     await env.DB.prepare(
-      "UPDATE targets SET state='uncertain',error_json=?,updated_at_ms=? WHERE post_id=? AND revision=? AND state='sending'",
+      "UPDATE targets SET state='uncertain',error_json=?,updated_at_ms=? WHERE post_id=? AND revision=? AND (state='sending' OR (state='accepted' AND continuation_claim_id IS NOT NULL AND continuation_rejected=0 AND COALESCE(json_extract(provider_state_json,'$.publishedId'),'')=''))",
     )
       .bind(
         JSON.stringify({
@@ -88,7 +88,7 @@ async function recoverProgress(now: number, env: Env): Promise<boolean> {
         "UPDATE dispatch_outbox SET workflow_id=?,receipts_only=?,state='pending',next_attempt_ms=?,claim_id=NULL,claimed_at_ms=NULL,attempt_count=0,error_code=NULL WHERE post_id=? AND revision=? AND action='create' AND EXISTS(SELECT 1 FROM posts WHERE id=? AND workflow_id=?)",
       ).bind(
         jobId,
-        post.cancel_requested_ms !== null ? 1 : 0,
+        work.accepted > 0 || post.cancel_requested_ms !== null ? 1 : 0,
         now,
         post.id,
         post.revision,

@@ -33,6 +33,7 @@ const manifest = {
   modules: [{ name: 'index.js', source: moduleSource, sha256: checksum(moduleSource) }],
   migrations,
   workflowClass: moduleSource.includes('PublishWorkflow') ? 'PublishWorkflow' : null,
+  cronTriggers: ['* * * * *'],
 };
 const output = path.join(root, 'apps/desktop/src-tauri/service-artifact');
 await mkdir(output, { recursive: true });

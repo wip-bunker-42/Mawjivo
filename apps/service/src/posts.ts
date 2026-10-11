@@ -711,6 +711,7 @@ export async function drainDispatchOutbox(instant: ISOInstant, env: Env): Promis
         action: 'create' | 'terminate';
         state: string;
         attempt_count: number;
+        receipts_only: number;
       }>()
   ).results;
   let sent = 0;
@@ -729,11 +730,18 @@ export async function drainDispatchOutbox(instant: ISOInstant, env: Env): Promis
         )
           .bind(row.post_id)
           .first<{ revision: number; cancel_requested_ms: number | null }>();
-        if (post?.revision === row.revision && post.cancel_requested_ms === null) {
+        if (
+          post?.revision === row.revision &&
+          (post.cancel_requested_ms === null || row.receipts_only === 1)
+        ) {
           try {
             await env.PUBLISH.create({
               id: row.workflow_id,
-              params: { postId: row.post_id, revision: row.revision },
+              params: {
+                postId: row.post_id,
+                revision: row.revision,
+                ...(row.receipts_only === 1 ? { receiptsOnly: true } : {}),
+              },
             });
           } catch {
             const instance = await env.PUBLISH.get(row.workflow_id);
@@ -800,7 +808,7 @@ export async function retryPost(
       "UPDATE target_parts SET state='ready',error_json=NULL WHERE post_id=? AND revision=? AND channel_id IN (SELECT channel_id FROM targets WHERE post_id=? AND revision=? AND state='ready' AND updated_at_ms=?)",
     ).bind(id, expected, id, expected, now),
     env.DB.prepare(
-      "UPDATE dispatch_outbox SET workflow_id=?,state='pending',next_attempt_ms=?,attempt_count=0,error_code=NULL,claim_id=NULL,claimed_at_ms=NULL WHERE post_id=? AND revision=? AND action='create' AND EXISTS(SELECT 1 FROM posts WHERE id=? AND revision=? AND workflow_id=? AND dispatch_generation=?)",
+      "UPDATE dispatch_outbox SET workflow_id=?,receipts_only=0,state='pending',next_attempt_ms=?,attempt_count=0,error_code=NULL,claim_id=NULL,claimed_at_ms=NULL WHERE post_id=? AND revision=? AND action='create' AND EXISTS(SELECT 1 FROM posts WHERE id=? AND revision=? AND workflow_id=? AND dispatch_generation=?)",
     ).bind(jobId, now, id, expected, id, expected, jobId, generation),
   ]);
   if (!results[0]!.meta.changes) return getPublicationReceipt(auth, id, env);

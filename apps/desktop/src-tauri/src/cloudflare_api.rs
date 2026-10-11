@@ -84,6 +84,44 @@ impl CloudflareClient {
             .await?;
         Ok(result)
     }
+    async fn healthchecks_request(&self, key: &str, suffix: &str, body: Option<Value>) -> Result<Value, AppError> {
+        let mut request = self.client.request(if body.is_some() { Method::POST } else { Method::GET }, format!("https://healthchecks.io/api/v3/{suffix}")).header("X-Api-Key", key);
+        if let Some(body) = body { request = request.json(&body); }
+        let response = request.send().await.map_err(|_| AppError::new("HEALTHCHECKS_SETUP", "تعذر تجهيز Healthchecks. أعد المحاولة لاستكمال الفحوص نفسها."))?;
+        if !response.status().is_success() { return Err(AppError::new("HEALTHCHECKS_SETUP", "راجع مفتاح Healthchecks والمنطقة الزمنية وصلاحية إدارة الفحوص.")); }
+        serde_json::from_slice(&bounded_body(response, 131072).await?).map_err(|_| AppError::new("HEALTHCHECKS_SETUP", "استجابة Healthchecks غير صالحة."))
+    }
+    pub async fn configure_monitoring(&self, state: &ProvisionState, management_key: &str, time_zone: &str) -> Result<Value, AppError> {
+        if management_key.is_empty() || management_key.len() > 1024 || time_zone.is_empty() || time_zone.len() > 100 {
+            return Err(AppError::new("INVALID_MONITORING", "راجع مفتاح Healthchecks والمنطقة الزمنية."));
+        }
+        let worker = state.worker_name();
+        if !self.worker_tags(&worker).await?.is_some_and(|tags| tags.contains(&state.owner_tag())) {
+            return Err(AppError::new("RESOURCE_NOT_OWNED", "خدمة Cloudflare لا تحمل علامة ملكية هذا الإعداد."));
+        }
+        let channels = self.healthchecks_request(management_key, "channels/", None).await?;
+        let emails: Vec<&str> = channels["channels"].as_array().ok_or_else(invalid_response)?.iter().filter(|channel| channel["kind"] == "email").filter_map(|channel| channel["id"].as_str()).collect();
+        let mut pings = Vec::new();
+        for kind in ["heartbeat", "daily"] {
+            let slug = format!("mawjivo-{}-{kind}", state.profile.service_id);
+            let found = self.healthchecks_request(management_key, &format!("checks/?slug={slug}"), None).await?;
+            if found["checks"].as_array().ok_or_else(invalid_response)?.iter().any(|check| !check["tags"].as_str().unwrap_or("").split_whitespace().any(|tag| tag == state.profile.service_id)) {
+                return Err(AppError::new("RESOURCE_NOT_OWNED", "يوجد فحص Healthchecks بالاسم نفسه دون علامة ملكية الخدمة."));
+            }
+            let mut body = json!({"name":format!("Mawjivo {} {kind}",state.profile.service_id),"slug":slug,"tags":format!("mawjivo {}",state.profile.service_id),"channels":emails.join(","),"unique":["slug"],"methods":"POST"});
+            if kind == "heartbeat" { body["timeout"] = json!(300); body["grace"] = json!(600); }
+            else { body["schedule"] = json!("0 0 * * *"); body["tz"] = json!(time_zone); body["grace"] = json!(900); }
+            let check = self.healthchecks_request(management_key, "checks/", Some(body)).await?;
+            let ping = check["ping_url"].as_str().filter(|url| url.starts_with("https://hc-ping.com/")).ok_or_else(invalid_response)?;
+            let identifier = ping.strip_prefix("https://hc-ping.com/").unwrap();
+            if uuid::Uuid::parse_str(identifier).is_err() { return Err(invalid_response()); }
+            pings.push(ping.to_string());
+        }
+        for (name, value) in [("HEARTBEAT_PING_URL", pings[0].as_str()), ("DAILY_PING_URL", pings[1].as_str()), ("MONITOR_TIME_ZONE", time_zone)] {
+            self.call(Method::PUT, &self.account_path(&format!("/workers/scripts/{worker}/secrets")), Some(json!({"name":name,"text":value,"type":"secret_text"}))).await?;
+        }
+        Ok(json!([{"code":"HEALTHCHECKS","state":if emails.is_empty(){"needsAction"}else{"ready"},"messageAr":if emails.is_empty(){"أُعدت الفحوص. أضف تكامل البريد في Healthchecks ثم أعد التجهيز."}else{"تم تجهيز مراقبة الخدمة والملخص على البريد."}}]))
+    }
     fn account_path(&self, path: &str) -> String {
         format!("/accounts/{}{}", self.account_id, path)
     }
@@ -472,6 +510,10 @@ impl ProvisionApi for CloudflareClient {
                 Some(json!({"class_name":class,"script_name":worker})),
             )
             .await?;
+        }
+        if !self.artifact.cron_triggers.is_empty() {
+            let schedules: Vec<Value> = self.artifact.cron_triggers.iter().map(|cron| json!({"cron":cron})).collect();
+            self.call(Method::PUT, &self.account_path(&format!("/workers/scripts/{worker}/schedules")), Some(json!(schedules))).await?;
         }
         let base_url = if let (Some(domain), Some(zone)) = (&input.domain, &input.zone_id) {
             self.attach_domain(domain, zone, &worker).await?;

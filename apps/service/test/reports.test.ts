@@ -2,7 +2,8 @@ import { beforeEach, afterEach, test, expect, vi } from 'vitest';
 import { sendReport, failureReport } from '../src/reports/telegram';
 import { saveTelegramSettings } from '../src/reports/settings';
 import { evaluateDailySummaries } from '../src/reports/daily';
-import { resetTestData, testEnv } from './helpers';
+import { resetTestData, testEnv, requestAs, ownerToken, limitedToken } from './helpers';
+import service from '../src/index';
 import { auth, publicationFixture } from './publication-fixture';
 import { submitPost } from '../src/posts';
 const botToken = '123456789:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
@@ -79,4 +80,50 @@ test('provider_error_report_has_action_and_no_secret', () => {
   expect(report.textAr).toContain('الربط');
   expect(report.textAr).not.toContain(botToken);
   expect(report.textAr).not.toContain('raw-secret');
+});
+
+test('the_workspace_api_encrypts_bot_credentials_and_never_returns_them', async () => {
+  const context = {} as ExecutionContext;
+  const saved = await service.fetch(
+    requestAs(ownerToken, '/api/workspaces/workspace-a/telegram', {
+      botToken,
+      chatId: '123456',
+      daily: true,
+    }),
+    testEnv(),
+    context,
+  );
+  expect(saved.status).toBe(200);
+  expect(await saved.text()).not.toContain(botToken);
+  const stored = await testEnv()
+    .DB.prepare("SELECT value_json FROM service_settings WHERE key='telegram:workspace-a'")
+    .first<{ value_json: string }>();
+  expect(stored!.value_json).not.toContain(botToken);
+  const read = await service.fetch(
+    requestAs(ownerToken, '/api/workspaces/workspace-a/telegram'),
+    testEnv(),
+    context,
+  );
+  expect(await read.text()).not.toContain(botToken);
+  const foreign = await service.fetch(
+    requestAs(limitedToken, '/api/workspaces/workspace-b/telegram'),
+    testEnv(),
+    context,
+  );
+  expect(foreign.status).toBe(403);
+});
+test('two_concurrent_report_claims_send_one_message', async () => {
+  await settings();
+  const fetcher = vi
+    .spyOn(globalThis, 'fetch')
+    .mockImplementation(async () => Response.json({ ok: true, result: { message_id: 57 } }));
+  const report = {
+    workspaceId: 'workspace-a',
+    dedupeKey: 'concurrent',
+    kind: 'failure' as const,
+    textAr: 'راجع ربط الحساب.',
+  };
+  await Promise.all([sendReport(report, testEnv()), sendReport(report, testEnv())]);
+  expect(fetcher).toHaveBeenCalledTimes(1);
+  expect(await sendReport(report, testEnv())).toMatchObject({ kind: 'sent', messageId: '57' });
 });

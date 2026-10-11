@@ -1,4 +1,6 @@
 import { authenticate } from './auth';
+import { runMonitor } from './monitoring';
+import { saveTelegramSettings, telegramStatus, type TelegramSettings } from './reports/settings';
 export { PublishWorkflow } from './workflows/publish';
 import { errorResponse, ServiceError } from './errors';
 import { readControlJson } from './http';
@@ -64,6 +66,34 @@ export default {
       }
       if (path.startsWith('/api/')) {
         const auth = await authenticate(request, env);
+        if (path === '/api/monitoring' && request.method === 'GET') {
+          const last = await env.DB.prepare(
+            "SELECT value_json,updated_at_ms FROM service_settings WHERE key='monitor:last-result'",
+          ).first<{ value_json: string; updated_at_ms: number }>();
+          return Response.json(
+            {
+              configured: !!(env.HEARTBEAT_PING_URL && env.DAILY_PING_URL),
+              lastCheckedAt: last ? new Date(last.updated_at_ms).toISOString() : null,
+              readiness: last ? JSON.parse(last.value_json).readiness : [],
+            },
+            { headers: { 'Cache-Control': 'no-store' } },
+          );
+        }
+        const telegramPath = /^\/api\/workspaces\/([A-Za-z0-9_-]{1,160})\/telegram$/.exec(path);
+        if (telegramPath) {
+          const workspaceId = telegramPath[1]!;
+          if (request.method === 'POST')
+            await saveTelegramSettings(
+              auth,
+              workspaceId,
+              (await readControlJson(request)) as TelegramSettings,
+              env,
+            );
+          if (['GET', 'POST'].includes(request.method))
+            return Response.json(await telegramStatus(auth, workspaceId, env), {
+              headers: { 'Cache-Control': 'no-store' },
+            });
+        }
         if (path === '/api/service/initialize' && request.method === 'POST')
           return Response.json(
             await initializeService(auth, env, fetch, new URL(request.url).origin),
@@ -314,5 +344,16 @@ export default {
     } catch (error) {
       return errorResponse(error);
     }
+  },
+  async scheduled(controller, env, ctx) {
+    ctx.waitUntil(
+      runMonitor(new Date(controller.scheduledTime).toISOString(), env).then(async (result) => {
+        await env.DB.prepare(
+          "INSERT INTO service_settings(key,value_json,updated_at_ms) VALUES('monitor:last-result',?,?) ON CONFLICT(key) DO UPDATE SET value_json=excluded.value_json,updated_at_ms=excluded.updated_at_ms",
+        )
+          .bind(JSON.stringify(result), controller.scheduledTime)
+          .run();
+      }),
+    );
   },
 } satisfies ExportedHandler<Env>;

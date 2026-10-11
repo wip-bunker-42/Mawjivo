@@ -17,6 +17,8 @@ pub struct ServiceArtifact {
     pub modules: Vec<ArtifactFile>,
     pub migrations: Vec<ArtifactFile>,
     pub workflow_class: Option<String>,
+    #[serde(default)]
+    pub cron_triggers: Vec<String>,
 }
 pub fn sha256(value: impl AsRef<[u8]>) -> String {
     Sha256::digest(value.as_ref())
@@ -36,6 +38,7 @@ impl ServiceArtifact {
             )
         })?;
         if artifact.main_module != "index.js"
+            || artifact.cron_triggers.iter().any(|cron| cron != "* * * * *")
             || artifact.modules.is_empty()
             || artifact.migrations.is_empty()
             || artifact
@@ -57,7 +60,8 @@ mod tests {
     use super::*;
     #[test]
     fn bundled_service_deploys_the_minute_monitor_trigger() {
-        let manifest: serde_json::Value = serde_json::from_str(include_str!("../service-artifact/manifest.json")).unwrap();
+        let manifest: serde_json::Value =
+            serde_json::from_str(include_str!("../service-artifact/manifest.json")).unwrap();
         assert_eq!(manifest["cronTriggers"], serde_json::json!(["* * * * *"]));
     }
     #[test]

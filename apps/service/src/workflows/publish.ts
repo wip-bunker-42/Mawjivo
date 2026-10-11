@@ -15,6 +15,7 @@ import type { AssetRow } from '../assets/model';
 export interface PublishJob {
   postId: string;
   revision: number;
+  receiptsOnly?: boolean;
 }
 const noWriteRetry = { retries: { limit: 0, delay: 1000 }, timeout: '5 minutes' as const };
 const safeReadRetry = {
@@ -440,9 +441,9 @@ async function continueMeta(job: PublishJob, plan: PostPlan, env: Env): Promise<
 export async function runPublication(job: PublishJob, step: WorkflowStep, env: Env): Promise<void> {
   const snapshot = await step.do('confirmed-plan', safeReadRetry, async () =>
     env.DB.prepare(
-      'SELECT r.* FROM post_revisions r JOIN posts p ON p.id=r.post_id WHERE r.post_id=? AND r.revision=? AND p.revision=r.revision AND p.cancel_requested_ms IS NULL',
+      'SELECT r.* FROM post_revisions r JOIN posts p ON p.id=r.post_id WHERE r.post_id=? AND r.revision=? AND p.revision=r.revision AND (p.cancel_requested_ms IS NULL OR ?=1)',
     )
-      .bind(job.postId, job.revision)
+      .bind(job.postId, job.revision, job.receiptsOnly ? 1 : 0)
       .first<RevisionRow>(),
   );
   if (!snapshot) return;
@@ -450,28 +451,33 @@ export async function runPublication(job: PublishJob, step: WorkflowStep, env: E
   if (plan.dueAt && Date.parse(plan.dueAt) > Date.now())
     await step.sleepUntil('publication-time', new Date(plan.dueAt));
   const connections = [...new Set(plan.targets.map((t) => t.connectionId))];
-  for (const connection of connections)
-    await step.do('send-' + connection, noWriteRetry, () =>
-      publishConnection(job, plan, snapshot.channel_snapshot_json, connection, env),
-    );
+  if (!job.receiptsOnly)
+    for (const connection of connections)
+      await step.do('send-' + connection, noWriteRetry, () =>
+        publishConnection(job, plan, snapshot.channel_snapshot_json, connection, env),
+      );
   for (let cycle = 0; cycle < 100; cycle++) {
     const pending = await step.do('pending-' + cycle, safeReadRetry, async () => {
       const list = (await rows(job, env)).filter(
-        (r) => (r.state === 'accepted' || r.state === 'ready') && r.next_check_ms !== null,
+        (r) =>
+          (r.state === 'accepted' || (!job.receiptsOnly && r.state === 'ready')) &&
+          r.next_check_ms !== null,
       );
       return list.length ? Math.min(...list.map((r) => r.next_check_ms!)) : null;
     });
     if (pending === null) break;
     if (pending > Date.now()) await step.sleepUntil('receipt-time-' + cycle, new Date(pending));
-    for (const connection of connections)
-      await step.do('deferred-send-' + cycle + '-' + connection, noWriteRetry, () =>
-        publishConnection(job, plan, snapshot.channel_snapshot_json, connection, env),
-      );
+    if (!job.receiptsOnly)
+      for (const connection of connections)
+        await step.do('deferred-send-' + cycle + '-' + connection, noWriteRetry, () =>
+          publishConnection(job, plan, snapshot.channel_snapshot_json, connection, env),
+        );
     for (const connection of connections)
       await step.do('receipt-' + cycle + '-' + connection, safeReadRetry, () =>
         receiptConnection(job, plan, connection, env),
       );
-    await step.do('meta-continuation-' + cycle, noWriteRetry, () => continueMeta(job, plan, env));
+    if (!job.receiptsOnly)
+      await step.do('meta-continuation-' + cycle, noWriteRetry, () => continueMeta(job, plan, env));
   }
   await step.do('final-state', safeReadRetry, () => aggregatePost(job.postId, job.revision, env));
 }

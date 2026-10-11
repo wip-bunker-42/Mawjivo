@@ -94,7 +94,14 @@ export async function sendReport(report: ReportMessage, env: Env): Promise<Repor
   if (row.state === 'failed') return rejected(row.error_code ?? undefined);
   if ((row.next_attempt_ms ?? 0) > now) return rejected('TELEGRAM_RATE_LIMIT');
   const config = await telegramSettings(report.workspaceId, env);
-  if (!config) return rejected('TELEGRAM_NOT_CONFIGURED');
+  if (!config) {
+    await env.DB.prepare(
+      "UPDATE report_outbox SET state='failed',error_code='TELEGRAM_NOT_CONFIGURED',updated_at_ms=? WHERE id=? AND state='pending'",
+    )
+      .bind(now, row.id)
+      .run();
+    return rejected('TELEGRAM_NOT_CONFIGURED');
+  }
   const claim = crypto.randomUUID();
   const owned = await env.DB.prepare(
     "UPDATE report_outbox SET state='sending',claim_id=?,claimed_at_ms=?,updated_at_ms=? WHERE id=? AND state='pending' AND next_attempt_ms<=?",

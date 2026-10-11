@@ -21,6 +21,7 @@ pub fn run() {
             windows::composer_context,
             windows::open_composer_window,
             commands::service_request,
+            commands::configure_monitoring,
             media::jobs::pick_media,
             media::jobs::probe_media,
             media::jobs::prepare_media,

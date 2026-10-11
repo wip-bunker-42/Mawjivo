@@ -235,6 +235,14 @@ export async function composerFixture(
         unregisterCallback: (id: number) => callbacks.delete(id),
         invoke: async (command: string, args?: Record<string, unknown>) => {
           calls.push({ command, args });
+          if (command === 'configure_monitoring')
+            return [
+              {
+                code: 'HEALTHCHECKS',
+                state: 'ready',
+                messageAr: 'تم تجهيز مراقبة الخدمة والملخص على البريد.',
+              },
+            ];
           if (command === 'plugin:event|listen') {
             const event = String(args!.event),
               id = Number(args!.handler);
@@ -319,6 +327,10 @@ export async function composerFixture(
             return null;
           if (command === 'service_request') {
             const path = String(args!.path);
+            if (path.endsWith('/telegram'))
+              return { configured: args!.method === 'POST', chatId: '', daily: true, reports: [] };
+            if (path === '/api/monitoring')
+              return { configured: false, lastCheckedAt: null, readiness: [] };
             if (path.includes('/posts/draft/')) return options.history ? historyReceipt : null;
             if (options.history && path.includes('/posts/list/'))
               return {

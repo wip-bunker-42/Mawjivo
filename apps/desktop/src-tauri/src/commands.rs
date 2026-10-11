@@ -54,6 +54,18 @@ pub fn save_draft(
     state.store.save_draft(&profile_id, &window_id, &draft)
 }
 #[tauri::command]
+pub async fn configure_monitoring(state: State<'_, NativeState>, profile_id: String, api_key: String, time_zone: String) -> Result<Value, AppError> {
+    let _guard = state.setup_lock.lock().await;
+    let selected = state.store.list_states()?.into_iter().find(|item| item.profile.id == profile_id).ok_or_else(|| AppError::new("PROFILE_NOT_FOUND", "اختر خدمة Cloudflare صحيحة."))?;
+    let reference = format!("{profile_id}:healthchecks");
+    let key = Zeroizing::new(if api_key.is_empty() { SystemVault.get(&reference)? } else { api_key });
+    let input = ProvisionInput { account_id: selected.profile.account_id.clone(), api_token: SystemVault.get(&format!("{profile_id}:cloudflare"))?, r2_access_key_id: SystemVault.get(&format!("{profile_id}:r2-access"))?, r2_secret_access_key: SystemVault.get(&format!("{profile_id}:r2-secret"))?, zone_id: None, domain: None };
+    let api = CloudflareClient::new(&input, &selected).await?;
+    let result = api.configure_monitoring(&selected, &key, &time_zone).await?;
+    SystemVault.set(&reference, &key)?;
+    Ok(result)
+}
+#[tauri::command]
 pub fn load_draft(
     state: State<'_, NativeState>,
     profile_id: String,
@@ -73,6 +85,9 @@ pub fn allowed_service_request(method: &str, path: &str) -> bool {
     }
     if path == "/api/service/initialize" {
         return method == "POST";
+    }
+    if path == "/api/monitoring" {
+        return method == "GET";
     }
     if path == "/api/workspaces" {
         return ["GET", "POST"].contains(&method);
@@ -96,6 +111,7 @@ pub fn allowed_service_request(method: &str, path: &str) -> bool {
         [_workspace, "summary"] => method == "GET",
         [_workspace, "summary", _date] => method == "GET",
         [_workspace, "connections"] => ["GET", "POST"].contains(&method),
+        [_workspace, "telegram"] => ["GET", "POST"].contains(&method),
         [_workspace, "connections", _connection] => ["PATCH", "DELETE"].contains(&method),
         [_workspace, "posts"] => ["GET", "POST"].contains(&method),
         [_workspace, "posts", _post] => ["GET", "PATCH", "DELETE"].contains(&method),
@@ -195,9 +211,18 @@ mod tests {
     use super::*;
     #[test]
     fn telegram_settings_are_scoped_to_the_native_workspace_bridge() {
-        assert!(allowed_service_request("GET", "/api/workspaces/space-1/telegram"));
-        assert!(allowed_service_request("POST", "/api/workspaces/space-1/telegram"));
-        assert!(!allowed_service_request("DELETE", "/api/workspaces/space-1/telegram"));
+        assert!(allowed_service_request(
+            "GET",
+            "/api/workspaces/space-1/telegram"
+        ));
+        assert!(allowed_service_request(
+            "POST",
+            "/api/workspaces/space-1/telegram"
+        ));
+        assert!(!allowed_service_request(
+            "DELETE",
+            "/api/workspaces/space-1/telegram"
+        ));
     }
     #[test]
     fn rpc_only_allows_bounded_service_paths() {
