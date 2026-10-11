@@ -14,6 +14,7 @@ pub trait ProvisionApi: Send + Sync {
     async fn worker_tags(&self, name: &str) -> Result<Option<Vec<String>>, AppError>;
     async fn database(&self, name: &str, known_id: Option<&str>) -> Result<String, AppError>;
     async fn bucket(&self, name: &str, known: bool) -> Result<(), AppError>;
+    async fn verify_existing_resources(&self, state: &ProvisionState) -> Result<(), AppError>;
     async fn deploy(
         &self,
         state: &ProvisionState,
@@ -34,13 +35,42 @@ pub fn service_package_info() -> Result<ServicePackageInfo, AppError> {
     })
 }
 pub async fn upgrade_with(
-    _api: &dyn ProvisionApi,
-    _vault: &dyn Vault,
-    _store: &LocalStore,
-    _profile_id: &str,
-    _package_id: &str,
+    api: &dyn ProvisionApi,
+    vault: &dyn Vault,
+    store: &LocalStore,
+    profile_id: &str,
+    package_id: &str,
 ) -> Result<ServiceProfile, AppError> {
-    Err(AppError::new("SERVICE_UPGRADE_UNAVAILABLE", "تعذر تحديث الخدمة."))
+    let package = service_package_info()?;
+    if package_id != package.id {
+        return Err(AppError::new("SERVICE_PACKAGE_INVALID", "حزمة الخدمة غير صالحة. افتح التحديث من التطبيق."));
+    }
+    let mut state = store.get_state(profile_id)?;
+    let tags = api.worker_tags(&state.worker_name()).await?;
+    if !tags.is_some_and(|tags| tags.contains(&state.owner_tag())) {
+        return Err(AppError::new("RESOURCE_NOT_OWNED", "الخدمة غير موجودة أو لا تحمل علامة الملكية. أعد فحص الإعداد."));
+    }
+    let input = stored_input(&state, vault)?;
+    validate_input(&input)?;
+    api.verify_existing_resources(&state).await?;
+    let device = Zeroizing::new(vault.get(&state.profile.device_credential_ref)?);
+    let key = Zeroizing::new(vault.get(&format!("{profile_id}:encryption"))?);
+    let base_url = api.deploy(&state, &device, &key, &input).await?;
+    state.profile.base_url = base_url;
+    state.profile.version = package.version;
+    store.save_state(&state)?;
+    Ok(state.profile)
+}
+pub fn stored_input(state: &ProvisionState, vault: &dyn Vault) -> Result<ProvisionInput, AppError> {
+    let id = &state.profile.id;
+    Ok(ProvisionInput {
+        account_id: state.profile.account_id.clone(),
+        api_token: vault.get(&format!("{id}:cloudflare"))?,
+        r2_access_key_id: vault.get(&format!("{id}:r2-access"))?,
+        r2_secret_access_key: vault.get(&format!("{id}:r2-secret"))?,
+        zone_id: state.zone_id.clone(),
+        domain: state.domain.clone(),
+    })
 }
 pub fn validate_input(input: &ProvisionInput) -> Result<(), AppError> {
     if input.account_id.len() != 32
@@ -120,6 +150,7 @@ pub async fn provision_with(
         ));
     }
     state.domain = input.domain.clone();
+    state.zone_id = input.zone_id.clone();
     store.save_state(&state)?;
     let device = secret(
         vault,
@@ -161,6 +192,7 @@ pub async fn provision_with(
     state.bucket_created = true;
     store.save_state(&state)?;
     state.profile.base_url = api.deploy(&state, &device, &encryption, &input).await?;
+    state.profile.version = service_package_info()?.version;
     store.save_state(&state)?;
     Ok(state.profile)
 }

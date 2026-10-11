@@ -26,8 +26,10 @@ pub fn list_profiles(state: State<'_, NativeState>) -> Result<Vec<ServiceProfile
 #[tauri::command]
 pub async fn provision_service(
     state: State<'_, NativeState>,
+    gate: State<'_, crate::updates::OperationGate>,
     input: ProvisionInput,
 ) -> Result<ServiceProfile, AppError> {
+    let _work = gate.work()?;
     let _guard = state.setup_lock.lock().await;
     let selected = state
         .store
@@ -39,6 +41,18 @@ pub async fn provision_service(
         .unwrap_or_else(|| ProvisionState::new(&input.account_id));
     let api = CloudflareClient::new(&input, &selected).await?;
     provision_with(&api, &SystemVault, &state.store, selected, input).await
+}
+#[tauri::command]
+pub fn service_package_info() -> Result<crate::cloudflare::ServicePackageInfo, AppError> { crate::cloudflare::service_package_info() }
+#[tauri::command]
+pub async fn upgrade_service(state: State<'_, NativeState>, gate: State<'_, crate::updates::OperationGate>, profile_id: String, package_id: String) -> Result<ServiceProfile, AppError> {
+    let _work = gate.work()?;
+    let _guard = state.setup_lock.lock().await;
+    if package_id != crate::cloudflare::service_package_info()?.id { return Err(AppError::new("SERVICE_PACKAGE_INVALID", "حزمة الخدمة غير صالحة.")); }
+    let selected = state.store.get_state(&profile_id)?;
+    let input = crate::cloudflare::stored_input(&selected, &SystemVault)?;
+    let api = CloudflareClient::new(&input, &selected).await?;
+    crate::cloudflare::upgrade_with(&api, &SystemVault, &state.store, &profile_id, &package_id).await
 }
 #[tauri::command]
 pub fn save_draft(
@@ -56,10 +70,12 @@ pub fn save_draft(
 #[tauri::command]
 pub async fn configure_monitoring(
     state: State<'_, NativeState>,
+    gate: State<'_, crate::updates::OperationGate>,
     profile_id: String,
     api_key: String,
     time_zone: String,
 ) -> Result<Value, AppError> {
+    let _work = gate.work()?;
     let _guard = state.setup_lock.lock().await;
     let selected = state
         .store
@@ -152,11 +168,13 @@ pub fn allowed_service_request(method: &str, path: &str) -> bool {
 #[tauri::command]
 pub async fn service_request(
     state: State<'_, NativeState>,
+    gate: State<'_, crate::updates::OperationGate>,
     profile_id: String,
     method: String,
     path: String,
     body: Option<Value>,
 ) -> Result<Value, AppError> {
+    let _work = gate.work()?;
     if !allowed_service_request(&method, &path)
         || ((method == "GET" || method == "DELETE") && body.is_some())
     {

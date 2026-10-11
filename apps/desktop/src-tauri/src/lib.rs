@@ -18,6 +18,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::list_profiles,
             commands::provision_service,
+            commands::service_package_info,
+            commands::upgrade_service,
             commands::save_draft,
             commands::load_draft,
             windows::composer_context,
@@ -27,6 +29,7 @@ pub fn run() {
             updates::tauri_backend::check_update,
             updates::tauri_backend::download_update,
             updates::tauri_backend::install_update,
+            updates::tauri_backend::acknowledge_update_flush,
             media::jobs::pick_media,
             media::jobs::probe_media,
             media::jobs::prepare_media,

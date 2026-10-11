@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use mawjivo_lib::{
-    cloudflare::{ProvisionApi, provision_with, upgrade_with, service_package_info},
+    cloudflare::{ProvisionApi, provision_with, service_package_info, upgrade_with},
     contracts::{AppError, Draft},
     profiles::{LocalStore, ProvisionInput, ProvisionState},
     vault::Vault,
@@ -34,6 +34,7 @@ struct FakeApi {
 }
 #[async_trait]
 impl ProvisionApi for FakeApi {
+    async fn verify_existing_resources(&self, _: &ProvisionState) -> Result<(), AppError> { Ok(()) }
     async fn worker_tags(&self, _: &str) -> Result<Option<Vec<String>>, AppError> {
         Ok(self.tags.lock().unwrap().clone())
     }
@@ -78,22 +79,40 @@ async fn service_upgrade_preserves_resource_ids_vault_and_local_draft() {
     let store = LocalStore::memory().unwrap();
     let vault = TestVault::default();
     let api = FakeApi::default();
-    let first = provision_with(&api, &vault, &store, ProvisionState::new(&input().account_id), input()).await.unwrap();
+    let first = provision_with(
+        &api,
+        &vault,
+        &store,
+        ProvisionState::new(&input().account_id),
+        input(),
+    )
+    .await
+    .unwrap();
     let before = store.get_state(&first.id).unwrap();
     let device = vault.get(&first.device_credential_ref).unwrap();
     let key = vault.get(&format!("{}:encryption", first.id)).unwrap();
     let draft: Draft = serde_json::from_value(serde_json::json!({"id":"kept-draft","workspaceId":"space-a","workspaceVersion":1,"timeZone":"Africa/Cairo","revision":1,"text":"مسودة محفوظة","title":"","assets":[],"selections":[],"overrides":{},"scheduleLocal":null,"scheduleOffset":null,"createdAt":"2026-10-11T00:00:00Z"})).unwrap();
     store.save_draft(&first.id, "main", &draft).unwrap();
     let package = service_package_info().unwrap();
-    let upgraded = upgrade_with(&api, &vault, &store, &first.id, &package.id).await.unwrap();
+    let upgraded = upgrade_with(&api, &vault, &store, &first.id, &package.id)
+        .await
+        .unwrap();
     assert_eq!(upgraded.id, first.id);
     assert_eq!(upgraded.service_id, first.service_id);
     assert_eq!(upgraded.device_credential_ref, first.device_credential_ref);
     assert_eq!(upgraded.version, package.version);
-    assert_eq!(store.get_state(&first.id).unwrap().database_id, before.database_id);
+    assert_eq!(
+        store.get_state(&first.id).unwrap().database_id,
+        before.database_id
+    );
     assert_eq!(vault.get(&first.device_credential_ref).unwrap(), device);
     assert_eq!(vault.get(&format!("{}:encryption", first.id)).unwrap(), key);
-    assert_eq!(store.load_draft(&first.id, "space-a", "kept-draft").unwrap(), Some(draft));
+    assert_eq!(
+        store
+            .load_draft(&first.id, "space-a", "kept-draft")
+            .unwrap(),
+        Some(draft)
+    );
     assert_eq!(*api.creates.lock().unwrap(), 1);
     assert_eq!(*api.deploys.lock().unwrap(), 2);
 }
@@ -103,8 +122,19 @@ async fn upgrade_refuses_missing_or_foreign_worker_without_recreating_it() {
         let store = LocalStore::memory().unwrap();
         let state = ProvisionState::new(&input().account_id);
         store.save_state(&state).unwrap();
-        let api = FakeApi { tags: Mutex::new(tags), ..Default::default() };
-        let error = upgrade_with(&api, &TestVault::default(), &store, &state.profile.id, &service_package_info().unwrap().id).await.unwrap_err();
+        let api = FakeApi {
+            tags: Mutex::new(tags),
+            ..Default::default()
+        };
+        let error = upgrade_with(
+            &api,
+            &TestVault::default(),
+            &store,
+            &state.profile.id,
+            &service_package_info().unwrap().id,
+        )
+        .await
+        .unwrap_err();
         assert_eq!(error.code, "RESOURCE_NOT_OWNED");
         assert_eq!(*api.creates.lock().unwrap(), 0);
         assert_eq!(*api.deploys.lock().unwrap(), 0);
@@ -114,7 +144,15 @@ async fn upgrade_refuses_missing_or_foreign_worker_without_recreating_it() {
 async fn upgrade_rejects_renderer_supplied_package_before_cloudflare_writes() {
     let store = LocalStore::memory().unwrap();
     let api = FakeApi::default();
-    let error = upgrade_with(&api, &TestVault::default(), &store, "profile", "C:/untrusted/worker.js").await.unwrap_err();
+    let error = upgrade_with(
+        &api,
+        &TestVault::default(),
+        &store,
+        "profile",
+        "C:/untrusted/worker.js",
+    )
+    .await
+    .unwrap_err();
     assert_eq!(error.code, "SERVICE_PACKAGE_INVALID");
     assert_eq!(*api.deploys.lock().unwrap(), 0);
 }

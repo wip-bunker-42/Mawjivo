@@ -4,16 +4,58 @@ use std::sync::{Arc, Mutex, MutexGuard};
 pub mod tauri_backend;
 
 #[derive(Clone, Default)]
-pub struct DraftFlush;
-pub struct FlushTicket { pub id: String }
+pub struct DraftFlush(Arc<FlushState>);
+#[derive(Default)]
+struct FlushState {
+    pending: Mutex<Option<FlushPending>>,
+    changed: tokio::sync::Notify,
+}
+struct FlushPending {
+    id: String,
+    windows: std::collections::HashSet<String>,
+    acknowledged: std::collections::HashSet<String>,
+    failed: bool,
+}
+pub struct FlushTicket {
+    pub id: String,
+    flush: DraftFlush,
+}
 impl DraftFlush {
-    pub fn begin(&self, _windows: Vec<String>) -> Result<FlushTicket, AppError> {
-        Ok(FlushTicket { id: uuid::Uuid::new_v4().to_string() })
+    pub fn begin(&self, windows: Vec<String>) -> Result<FlushTicket, AppError> {
+        let mut pending = self.0.pending.lock().map_err(|_| state_error())?;
+        if pending.is_some() { return Err(busy()); }
+        let id = uuid::Uuid::new_v4().to_string();
+        *pending = Some(FlushPending { id: id.clone(), windows: windows.into_iter().collect(), acknowledged: Default::default(), failed: false });
+        Ok(FlushTicket { id, flush: self.clone() })
     }
-    pub fn acknowledge(&self, _owner: &str, _id: &str, _saved: bool) -> Result<(), AppError> { Ok(()) }
+    pub fn acknowledge(&self, owner: &str, id: &str, saved: bool) -> Result<(), AppError> {
+        let mut pending = self.0.pending.lock().map_err(|_| state_error())?;
+        let selected = pending.as_mut().filter(|ticket| ticket.id == id && ticket.windows.contains(owner)).ok_or_else(|| AppError::new("INVALID_WINDOW", "طلب حفظ النافذة غير صالح."))?;
+        if selected.acknowledged.insert(owner.into()) && !saved { selected.failed = true; }
+        self.0.changed.notify_one();
+        Ok(())
+    }
 }
 impl FlushTicket {
-    pub async fn wait(&self) -> Result<(), AppError> { Ok(()) }
+    pub async fn wait(&self) -> Result<(), AppError> {
+        loop {
+            let changed = self.flush.0.changed.notified();
+            {
+                let pending = self.flush.0.pending.lock().map_err(|_| state_error())?;
+                let selected = pending.as_ref().filter(|ticket| ticket.id == self.id).ok_or_else(state_error)?;
+                if selected.failed { return Err(AppError::new("UPDATE_DRAFT_SAVE", "تعذر حفظ إحدى المسودات. راجع النوافذ المفتوحة ثم أعد التثبيت.")); }
+                if selected.windows == selected.acknowledged { return Ok(()); }
+            }
+            changed.await;
+        }
+    }
+}
+impl Drop for FlushTicket {
+    fn drop(&mut self) {
+        if let Ok(mut pending) = self.flush.0.pending.lock() {
+            if pending.as_ref().is_some_and(|ticket| ticket.id == self.id) { *pending = None; }
+        }
+    }
 }
 
 pub const MAX_UPDATE_BYTES: u64 = 512 * 1_048_576;
@@ -196,6 +238,21 @@ impl<B: UpdateBackend> UpdateManager<B> {
     pub fn install(&self, owner: &str, id: &str) -> Result<(), AppError> {
         let _serial = self.serial.try_lock().map_err(|_| busy())?;
         let _install = self.gate.install()?;
+        self.install_ready(owner, id)
+    }
+    pub async fn install_after_prepare<F>(&self, owner: &str, id: &str, prepare: F) -> Result<(), AppError>
+    where F: std::future::Future<Output = Result<(), AppError>> + Send {
+        let _serial = self.serial.try_lock().map_err(|_| busy())?;
+        let _install = self.gate.install()?;
+        {
+            let pending = self.pending()?;
+            let selected = pending.as_ref().filter(|p| p.id == id && p.owner == owner).ok_or_else(not_found)?;
+            if selected.verified.is_none() { return Err(AppError::new("UPDATE_NOT_VERIFIED", "نزّل التحديث وتحقق من توقيعه أولًا.")); }
+        }
+        prepare.await?;
+        self.install_ready(owner, id)
+    }
+    fn install_ready(&self, owner: &str, id: &str) -> Result<(), AppError> {
         let pending = self.pending()?;
         let selected = pending
             .as_ref()

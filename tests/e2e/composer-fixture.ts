@@ -14,6 +14,8 @@ export async function composerFixture(
     repairedRejection?: boolean;
     olderNativeDraft?: boolean;
     update?: 'available' | 'signature-invalid' | 'busy' | 'none';
+    deferredSave?: boolean;
+    saveFailure?: boolean;
   } = {},
 ): Promise<void> {
   await page.addInitScript((options) => {
@@ -129,11 +131,15 @@ export async function composerFixture(
       }
     };
     let resolvePick: ((value: unknown) => void) | undefined;
+    let resolveSave: (() => void) | undefined;
     const api = {
       calls,
       drafts,
       jobs,
       finish,
+      flush: () => emit('update-flush', { ticketId: 'synthetic-flush' }),
+      releaseFlush: () => emit('update-flush-release', {}),
+      resolveSave: () => resolveSave?.(),
       progress: () => {
         for (const job of jobs.values())
           emit('upload-progress', {
@@ -309,9 +315,16 @@ export async function composerFixture(
           if (command === 'composer_context')
             return { windowId, draft: drafts.get(String(args!.workspaceId)) ?? null };
           if (command === 'save_draft') {
+            if (options.deferredSave && (args!.draft as any).text)
+              await new Promise<void>((resolve) => {
+                resolveSave = resolve;
+              });
+            if (options.saveFailure && (args!.draft as any).text)
+              throw { code: 'STORAGE_ERROR', messageAr: 'تعذر حفظ المسودة.', retryable: false };
             drafts.set((args!.draft as any).workspaceId, structuredClone(args!.draft));
             return null;
           }
+          if (command === 'acknowledge_update_flush') return null;
           if (command === 'load_draft') return drafts.get(String(args!.workspaceId)) ?? null;
           if (command === 'open_composer_window') return 'composer-' + crypto.randomUUID();
           if (command === 'pick_media')

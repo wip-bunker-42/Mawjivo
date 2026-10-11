@@ -1,6 +1,53 @@
 import { test, expect } from '@playwright/test';
 import { composerFixture } from './composer-fixture';
 
+test('a window acknowledges update preparation only after its queued draft is saved', async ({
+  page,
+}) => {
+  await composerFixture(page, { deferredSave: true });
+  await page.goto('/');
+  await page.getByLabel('النص أو الوصف', { exact: true }).fill('آخر كتابة قبل التحديث');
+  await page.getByRole('button', { name: 'الإعدادات', exact: true }).click();
+  await page.evaluate(() => (globalThis as any).__MAWJIVO_TEST__.flush());
+  const acknowledgements = () =>
+    page.evaluate(() =>
+      (globalThis as any).__MAWJIVO_TEST__.calls.filter(
+        (c: any) => c.command === 'acknowledge_update_flush',
+      ),
+    );
+  expect(await acknowledgements()).toHaveLength(0);
+  await page.evaluate(() => (globalThis as any).__MAWJIVO_TEST__.resolveSave());
+  await expect
+    .poll(acknowledgements)
+    .toEqual([
+      { command: 'acknowledge_update_flush', args: { ticketId: 'synthetic-flush', saved: true } },
+    ]);
+  expect(
+    await page.evaluate(() => (globalThis as any).__MAWJIVO_TEST__.drafts.get('space-a').text),
+  ).toBe('آخر كتابة قبل التحديث');
+});
+
+test('a failed draft save refuses the window acknowledgement for installation', async ({
+  page,
+}) => {
+  await composerFixture(page, { saveFailure: true });
+  await page.goto('/');
+  await page.getByLabel('النص أو الوصف', { exact: true }).fill('مسودة تعذر حفظها');
+  await expect(page.getByText('تعذر حفظ المسودة.')).toBeVisible();
+  await page.evaluate(() => (globalThis as any).__MAWJIVO_TEST__.flush());
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        (globalThis as any).__MAWJIVO_TEST__.calls.filter(
+          (c: any) => c.command === 'acknowledge_update_flush',
+        ),
+      ),
+    )
+    .toEqual([
+      { command: 'acknowledge_update_flush', args: { ticketId: 'synthetic-flush', saved: false } },
+    ]);
+});
+
 test('upgrades only the selected user service after an explicit action', async ({ page }) => {
   await composerFixture(page);
   await page.goto('/');

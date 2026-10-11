@@ -40,6 +40,7 @@ import {
   uploadedAsset,
 } from '../../bridge';
 import type { UploadProgress } from '../../bridge';
+import { queueDraftWrite, updatePreparing } from '../../draft-writes';
 export const platformNames: Record<Platform, string> = {
   facebook: 'Facebook',
   instagram: 'Instagram',
@@ -181,12 +182,13 @@ export function useComposer(workspace: Workspace, editing?: PostDetail) {
   function persist(session: Session): void {
     const draft = structuredClone(session.draft);
     // Preserve order when a user switches workspaces while older writes are in flight.
-    session.persist = session.persist
-      .catch(() => {})
-      .then(() => saveDraft(session.workspace.serviceProfileId, session.windowId, draft))
-      .catch((error) => message(session, errorMessage(error)));
+    session.persist = queueDraftWrite(
+      JSON.stringify([session.workspace.serviceProfileId, draft.workspaceId, draft.id]),
+      () => saveDraft(session.workspace.serviceProfileId, session.windowId, draft),
+    ).catch((error) => message(session, errorMessage(error)));
   }
   function update(session: Session, patch: Partial<Draft>): void {
+    if (updatePreparing()) return;
     session.draft = { ...session.draft, ...patch, revision: session.draft.revision + 1 };
     session.message = '';
     session.lastSubmission = undefined;
@@ -693,6 +695,7 @@ export function useComposer(workspace: Workspace, editing?: PostDetail) {
     }
   }
   function reset(): void {
+    if (updatePreparing()) return;
     if (session) {
       session.draft = newDraft(workspace, session.caps);
       session.jobs = new Map();

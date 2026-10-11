@@ -12,6 +12,8 @@ import { WorkspaceSelect } from './features/workspaces/WorkspaceSelect';
 import type { Workspace, PostDetail } from '@mawjivo/core';
 import type { ServiceProfile } from './bridge';
 import { listProfiles, serviceRequest, errorMessage, openComposerWindow } from './bridge';
+import { onUpdateFlush, onUpdateFlushRelease, acknowledgeUpdateFlush } from './bridge';
+import { flushDraftWrites, releaseUpdatePreparation } from './draft-writes';
 
 const pages = [
   { id: 'compose', label: 'منشور جديد' },
@@ -22,6 +24,29 @@ const pages = [
 type PageId = (typeof pages)[number]['id'];
 
 export function App(): ReactElement {
+  useEffect(() => {
+    let active = true;
+    const stops: (() => void)[] = [];
+    const retain = (stop: () => void): void => {
+      if (active) stops.push(stop);
+      else stop();
+    };
+    void onUpdateFlush((ticketId) => {
+      if (active)
+        void flushDraftWrites()
+          .then((saved) => acknowledgeUpdateFlush(ticketId, saved))
+          .catch(() => {});
+    })
+      .then(retain)
+      .catch(() => {});
+    void onUpdateFlushRelease(releaseUpdatePreparation)
+      .then(retain)
+      .catch(() => {});
+    return () => {
+      active = false;
+      stops.forEach((stop) => stop());
+    };
+  }, []);
   const [page, setPage] = useState<PageId>('compose');
   const [editing, setEditing] = useState<PostDetail | null>(null);
   const [profiles, setProfiles] = useState<ServiceProfile[]>([]),

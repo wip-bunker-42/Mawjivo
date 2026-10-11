@@ -92,6 +92,20 @@ export interface ServicePackageInfo {
 export const servicePackageInfo = () => native<ServicePackageInfo>('service_package_info');
 export const upgradeService = (profileId: string, packageId: string) =>
   native<ServiceProfile>('upgrade_service', { profileId, packageId });
+export function onUpdateFlush(callback: (ticketId: string) => void): Promise<() => void> {
+  if (!isTauri()) return Promise.resolve(() => {});
+  return listen<{ ticketId: string }>('update-flush', (event) => callback(event.payload.ticketId), {
+    target: { kind: 'Window', label: getCurrentWindow().label },
+  });
+}
+export function onUpdateFlushRelease(callback: () => void): Promise<() => void> {
+  if (!isTauri()) return Promise.resolve(() => {});
+  return listen('update-flush-release', callback, {
+    target: { kind: 'Window', label: getCurrentWindow().label },
+  });
+}
+export const acknowledgeUpdateFlush = (ticketId: string, saved: boolean) =>
+  native<void>('acknowledge_update_flush', { ticketId, saved });
 export function onUpdateProgress(
   callback: (progress: UpdateProgress) => void,
 ): Promise<() => void> {

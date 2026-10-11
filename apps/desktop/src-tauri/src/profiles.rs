@@ -38,6 +38,8 @@ pub struct ProvisionState {
     pub database_id: Option<String>,
     pub bucket_created: bool,
     pub domain: Option<String>,
+    #[serde(default)]
+    pub zone_id: Option<String>,
 }
 impl ProvisionState {
     pub fn new(account: &str) -> Self {
@@ -54,6 +56,7 @@ impl ProvisionState {
             database_id: None,
             bucket_created: false,
             domain: None,
+            zone_id: None,
         }
     }
     pub fn worker_name(&self) -> String {

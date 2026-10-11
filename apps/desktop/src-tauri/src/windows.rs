@@ -30,7 +30,10 @@ pub fn composer_context(
 }
 #[tauri::command]
 pub async fn open_composer_window(app: AppHandle) -> Result<String, AppError> {
+    use tauri::Manager;
+    let work = app.state::<crate::updates::OperationGate>().work()?;
     tauri::async_runtime::spawn_blocking(move || {
+        let _work = work;
         let label = composer_window_label();
         WebviewWindowBuilder::new(&app, &label, WebviewUrl::App("index.html".into()))
             .title("Mawjivo — منشور جديد")
