@@ -2,6 +2,7 @@ import { readFile, readdir, lstat, mkdir, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import { spawnSync } from 'node:child_process';
+import { packageManagerInvocation } from './package-manager.mjs';
 const sections = [await readFile('THIRD_PARTY_NOTICES.md', 'utf8')];
 async function appendLicense(directory, label) {
   const files = (await readdir(directory)).filter((name) =>
@@ -14,30 +15,34 @@ async function appendLicense(directory, label) {
   }
   if (!files.length) throw new Error('Missing notices: ' + label);
 }
-const store = 'node_modules/.pnpm';
-for (const entry of await readdir(store)) {
-  const modules = join(store, entry, 'node_modules');
-  let names;
-  try {
-    names = await readdir(modules);
-  } catch {
-    continue;
+const invocation = packageManagerInvocation(process.env.npm_execpath, [
+  'list',
+  '--prod',
+  '--depth',
+  'Infinity',
+  '--json',
+  '--recursive',
+]);
+const listed = spawnSync(invocation.executable, invocation.args, {
+  encoding: 'utf8',
+  windowsHide: true,
+});
+if (listed.status !== 0) throw new Error('Runtime JavaScript inventory failed.');
+const seen = new Set();
+async function visit(item) {
+  if (item.path && !seen.has(item.path)) {
+    seen.add(item.path);
+    const pkg = JSON.parse(await readFile(join(item.path, 'package.json'), 'utf8'));
+    if (pkg.name !== 'mawjivo' && !pkg.name.startsWith('@mawjivo/'))
+      await appendLicense(item.path, pkg.name + ' ' + pkg.version);
   }
-  for (const name of names) {
-    const path = join(modules, name);
-    if ((await lstat(path)).isSymbolicLink()) continue;
-    const paths = name.startsWith('@') ? (await readdir(path)).map((n) => join(path, n)) : [path];
-    for (const item of paths) {
-      if ((await lstat(item)).isSymbolicLink()) continue;
-      let pkg;
-      try {
-        pkg = JSON.parse(await readFile(join(item, 'package.json'), 'utf8'));
-      } catch {
-        continue;
-      }
-      await appendLicense(item, pkg.name + ' ' + pkg.version);
-    }
-  }
+  for (const child of Object.values(item.dependencies ?? {})) await visit(child);
+  for (const child of Object.values(item.optionalDependencies ?? {})) await visit(child);
+}
+for (const item of JSON.parse(listed.stdout)) await visit(item);
+if (process.argv.includes('--javascript')) {
+  console.log('JavaScript runtime notices verified (' + sections.length + ' license sections).');
+  process.exit(0);
 }
 const tree = spawnSync(
   'cargo',

@@ -3,16 +3,15 @@ import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
+import { packageManagerInvocation } from './package-manager.mjs';
 const root = fileURLToPath(new URL('..', import.meta.url));
 const pnpmCli = process.env.npm_execpath;
 if (!pnpmCli) throw new Error('Run this script with pnpm service:artifact.');
-const executable = pnpmCli.endsWith('.exe') ? pnpmCli : process.execPath;
-const args = [
-  ...(executable === process.execPath ? [pnpmCli] : []),
+const { executable, args } = packageManagerInvocation(pnpmCli, [
   '--filter',
   '@mawjivo/service',
   'build',
-];
+]);
 const result = spawnSync(executable, args, { cwd: root, stdio: 'inherit', windowsHide: true });
 if (result.status !== 0) process.exit(result.status ?? 1);
 const checksum = (text) => createHash('sha256').update(text).digest('hex');
