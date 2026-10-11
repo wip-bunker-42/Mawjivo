@@ -5,6 +5,13 @@ use mawjivo_lib::{
 };
 use rusqlite::Connection;
 use serde_json::json;
+
+#[test]
+fn a_newer_remote_schema_is_rejected_before_deployment() {
+    let artifact = ServiceArtifact::bundled().unwrap();
+    let error = mawjivo_lib::cloudflare_api::validate_remote_migrations(&artifact, &json!([{"name":"0099_future.sql","sha256":"future"}])).unwrap_err();
+    assert_eq!(error.code, "SERVICE_SCHEMA_NEWER");
+}
 use mawjivo_lib::{contracts::{AppError, Draft, UpdateInfo}, profiles::migrate_local_database, updates::{AvailableUpdate, OperationGate, UpdateBackend, UpdateManager}};
 use async_trait::async_trait;
 use std::sync::{Arc, atomic::{AtomicUsize, Ordering}};
@@ -17,7 +24,7 @@ impl UpdateBackend for TestUpdater {
     async fn check(&self) -> Result<Option<AvailableUpdate<()>>, AppError> {
         Ok(Some(AvailableUpdate { offer: (), info: UpdateInfo { id: String::new(), version: "0.1.1".into(), notes_ar: "تحسين حفظ المسودات.".into(), bytes: 4 } }))
     }
-    async fn download(&self, _: &()) -> Result<Vec<u8>, AppError> {
+    async fn download(&self, _: &(), _: mawjivo_lib::updates::ProgressSink) -> Result<Vec<u8>, AppError> {
         if self.bad_signature { Err(AppError::new("UPDATE_SIGNATURE_INVALID", "توقيع التحديث غير صالح. أعد الفحص.")) }
         else { Ok(b"test".to_vec()) }
     }

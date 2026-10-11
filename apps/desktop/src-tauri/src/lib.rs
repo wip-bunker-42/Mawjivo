@@ -6,13 +6,14 @@ pub mod error;
 pub mod media;
 pub mod profiles;
 pub mod service_artifact;
-pub mod upload;
 pub mod updates;
+pub mod upload;
 pub mod vault;
 pub mod windows;
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(commands::setup)
         .invoke_handler(tauri::generate_handler![
             commands::list_profiles,
@@ -23,6 +24,9 @@ pub fn run() {
             windows::open_composer_window,
             commands::service_request,
             commands::configure_monitoring,
+            updates::tauri_backend::check_update,
+            updates::tauri_backend::download_update,
+            updates::tauri_backend::install_update,
             media::jobs::pick_media,
             media::jobs::probe_media,
             media::jobs::prepare_media,

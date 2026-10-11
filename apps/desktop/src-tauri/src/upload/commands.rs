@@ -20,6 +20,7 @@ use zeroize::Zeroizing;
 
 pub struct UploadState {
     pub engine: UploadEngine,
+    gate: crate::updates::OperationGate,
     active: Mutex<HashMap<String, Arc<AtomicBool>>>,
 }
 fn state_error() -> AppError {
@@ -27,8 +28,12 @@ fn state_error() -> AppError {
 }
 impl UploadState {
     pub fn new(engine: UploadEngine) -> Self {
+        Self::with_gate(engine, crate::updates::OperationGate::default())
+    }
+    pub fn with_gate(engine: UploadEngine, gate: crate::updates::OperationGate) -> Self {
         Self {
             engine,
+            gate,
             active: Mutex::new(HashMap::new()),
         }
     }
@@ -39,6 +44,7 @@ impl UploadState {
         remote: HttpUploadTransport,
         sink: ProgressSink,
     ) -> Result<(), AppError> {
+        let work = self.gate.work()?;
         let initial = self.engine.store.get(owner, id)?;
         let flag = {
             let mut active = self.active.lock().map_err(|_| state_error())?;
@@ -53,6 +59,7 @@ impl UploadState {
         let owner = owner.to_owned();
         let id = id.to_owned();
         tauri::async_runtime::spawn(async move {
+            let _work = work;
             let started = Instant::now();
             let reported = Arc::new(AtomicBool::new(false));
             let remembered = reported.clone();
@@ -120,6 +127,7 @@ pub async fn start_upload(
     state: State<'_, Arc<UploadState>>,
     mut input: UploadInput,
 ) -> Result<String, AppError> {
+    let _work = state.gate.work()?;
     let transport = remote(&native, &input.profile_id)?;
     let (path, manifest) = media.registry.upload_for(window.label(), &input)?;
     input.manifest = manifest;
@@ -134,6 +142,7 @@ pub async fn resume_upload(
     state: State<'_, Arc<UploadState>>,
     job_id: String,
 ) -> Result<(), AppError> {
+    let _work = state.gate.work()?;
     let session = state.engine.store.get(window.label(), &job_id)?;
     let transport = remote(&native, &session.input.profile_id)?;
     let restarted = state.engine.revalidate(window.label(), &job_id)?;
@@ -205,8 +214,6 @@ pub fn restore_uploads(
 pub fn setup(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let local = app.state::<NativeState>().store.clone();
     let store = UploadStore::new(local).map_err(|e| std::io::Error::other(e.message_ar))?;
-    app.manage(Arc::new(UploadState::new(UploadEngine::new(Arc::new(
-        store,
-    )))));
+    app.manage(Arc::new(UploadState::with_gate(UploadEngine::new(Arc::new(store)), app.state::<crate::updates::OperationGate>().inner().clone())));
     Ok(())
 }

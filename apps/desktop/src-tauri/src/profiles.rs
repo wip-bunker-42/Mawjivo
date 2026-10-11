@@ -72,9 +72,23 @@ fn storage_error(_: impl std::fmt::Debug) -> AppError {
         "تعذر حفظ البيانات المحلية. تحقق من مساحة القرص وصلاحيات مجلد التطبيق.",
     )
 }
-pub fn migrate_local_database(db: &mut Connection, _backup: &Path, version: u32, sql: &str) -> Result<(), AppError> {
-    db.execute_batch(sql).map_err(|_| AppError::new("LOCAL_MIGRATION_FAILED", "تعذر ترقية البيانات المحلية. احتُفظ بمسوداتك."))?;
-    db.pragma_update(None, "user_version", version).map_err(storage_error)
+fn consistent_backup(db: &Connection, path: &Path) -> Result<(), AppError> {
+    if let Some(parent) = path.parent() { std::fs::create_dir_all(parent).map_err(storage_error)?; }
+    db.execute("VACUUM INTO ?", [path.to_str().ok_or_else(|| storage_error("path"))?]).map_err(storage_error)?;
+    Ok(())
+}
+pub fn migrate_local_database(db: &mut Connection, backup: &Path, version: u32, sql: &str) -> Result<(), AppError> {
+    apply_local_migration(db, Some(backup), version, sql)
+}
+fn apply_local_migration(db: &mut Connection, backup: Option<&Path>, version: u32, sql: &str) -> Result<(), AppError> {
+    let current: u32 = db.query_row("PRAGMA user_version", [], |row| row.get(0)).map_err(storage_error)?;
+    if current > version { return Err(AppError::new("LOCAL_SCHEMA_NEWER", "البيانات المحلية تخص إصدارًا أحدث. ثبّت الإصدار الأحدث للحفاظ على مسوداتك.")); }
+    if current == version { return Ok(()); }
+    if let Some(path) = backup { consistent_backup(db, path)?; }
+    let transaction = db.transaction().map_err(storage_error)?;
+    transaction.execute_batch(sql).map_err(|_| AppError::new("LOCAL_MIGRATION_FAILED", "تعذر ترقية البيانات المحلية. احتُفظ بمسوداتك والنسخة الاحتياطية."))?;
+    transaction.pragma_update(None, "user_version", version).map_err(storage_error)?;
+    transaction.commit().map_err(storage_error)
 }
 impl LocalStore {
     pub fn window_draft(
@@ -92,27 +106,34 @@ impl LocalStore {
             .transpose()
     }
     pub fn memory() -> Result<Self, AppError> {
-        Self::initialize(Connection::open_in_memory().map_err(storage_error)?)
+        Self::initialize(Connection::open_in_memory().map_err(storage_error)?, None)
     }
     pub fn open(path: &Path) -> Result<Self, AppError> {
-        Self::initialize(Connection::open(path).map_err(storage_error)?)
+        Self::initialize(Connection::open(path).map_err(storage_error)?, Some(path))
     }
-    fn initialize(db: Connection) -> Result<Self, AppError> {
+    fn initialize(mut db: Connection, path: Option<&Path>) -> Result<Self, AppError> {
         db.busy_timeout(std::time::Duration::from_secs(5))
             .map_err(storage_error)?;
-        let version: u32 = db.query_row("PRAGMA user_version", [], |row| row.get(0)).map_err(storage_error)?;
+        let version: u32 = db
+            .query_row("PRAGMA user_version", [], |row| row.get(0))
+            .map_err(storage_error)?;
         if version > 2 {
-            return Err(AppError::new("LOCAL_SCHEMA_NEWER", "البيانات المحلية تخص إصدارًا أحدث. ثبّت الإصدار الأحدث للحفاظ على مسوداتك."));
+            return Err(AppError::new(
+                "LOCAL_SCHEMA_NEWER",
+                "البيانات المحلية تخص إصدارًا أحدث. ثبّت الإصدار الأحدث للحفاظ على مسوداتك.",
+            ));
         }
-        db.execute_batch("PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL;
+        db.execute_batch("PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL;").map_err(storage_error)?;
+        let backup = path.filter(|_| version > 0 && version < 2).map(|path| path.parent().unwrap_or(Path::new(".")).join("backups").join(format!("before-schema-{version}-{}.sqlite", uuid::Uuid::new_v4())));
+        apply_local_migration(&mut db, backup.as_deref(), 2, "
             CREATE TABLE IF NOT EXISTS profiles(id TEXT PRIMARY KEY,state_json TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS drafts(profile_id TEXT NOT NULL,workspace_id TEXT NOT NULL,id TEXT NOT NULL,revision INTEGER NOT NULL,body TEXT NOT NULL,PRIMARY KEY(profile_id,workspace_id,id),FOREIGN KEY(profile_id) REFERENCES profiles(id));
             CREATE TABLE IF NOT EXISTS window_drafts(profile_id TEXT NOT NULL,window_id TEXT NOT NULL,workspace_id TEXT NOT NULL,draft_id TEXT NOT NULL,PRIMARY KEY(profile_id,window_id),FOREIGN KEY(profile_id,workspace_id,draft_id) REFERENCES drafts(profile_id,workspace_id,id));
             CREATE TABLE IF NOT EXISTS composer_drafts(profile_id TEXT NOT NULL,window_id TEXT NOT NULL,workspace_id TEXT NOT NULL,draft_id TEXT NOT NULL,PRIMARY KEY(profile_id,window_id,workspace_id),FOREIGN KEY(profile_id,workspace_id,draft_id) REFERENCES drafts(profile_id,workspace_id,id));
-            INSERT OR IGNORE INTO composer_drafts SELECT profile_id,window_id,workspace_id,draft_id FROM window_drafts;
-            PRAGMA user_version=2;").map_err(storage_error)?;
+            INSERT OR IGNORE INTO composer_drafts SELECT profile_id,window_id,workspace_id,draft_id FROM window_drafts;")?;
         Ok(Self { db: Mutex::new(db) })
     }
+    pub fn backup(&self, path: &Path) -> Result<(), AppError> { consistent_backup(&self.lock()?, path) }
     pub(crate) fn lock(&self) -> Result<MutexGuard<'_, Connection>, AppError> {
         self.db.lock().map_err(storage_error)
     }

@@ -336,9 +336,12 @@ fn emit(window: &Window, id: &str, stage: &str, percent: u8) {
 pub async fn pick_media(
     window: Window,
     state: State<'_, Arc<MediaState>>,
+    gate: State<'_, crate::updates::OperationGate>,
 ) -> Result<Vec<SelectedFile>, AppError> {
+    let work = gate.work()?;
     let state = state.inner().clone();
     tauri::async_runtime::spawn_blocking(move || {
+        let _work = work;
         let files = window
             .dialog()
             .file()
@@ -391,10 +394,13 @@ pub async fn pick_media(
 pub async fn probe_media(
     window: Window,
     state: State<'_, Arc<MediaState>>,
+    gate: State<'_, crate::updates::OperationGate>,
     file_id: String,
 ) -> Result<MediaAsset, AppError> {
+    let work = gate.work()?;
     let state = state.inner().clone();
     tauri::async_runtime::spawn_blocking(move || {
+        let _work = work;
         let path = state.registry.file_for(window.label(), &file_id)?;
         emit(&window, &file_id, "probe", 0);
         let info = probe(state.tools()?, &path)?;
@@ -427,9 +433,11 @@ pub async fn probe_media(
 pub async fn prepare_media(
     window: Window,
     state: State<'_, Arc<MediaState>>,
+    gate: State<'_, crate::updates::OperationGate>,
     file_id: String,
     recipe: MediaRecipe,
 ) -> Result<PreparedLocalAsset, AppError> {
+    let work = gate.work()?;
     let state = state.inner().clone();
     let path = state.registry.file_for(window.label(), &file_id)?;
     if recipe.source_asset_id != file_id {
@@ -445,6 +453,7 @@ pub async fn prepare_media(
     let task_id = file_id.clone();
     let task_window = window.clone();
     let result = tauri::async_runtime::spawn_blocking(move || {
+        let _work = work;
         task_state
             .registry
             .file_for(task_window.label(), &task_id)?;

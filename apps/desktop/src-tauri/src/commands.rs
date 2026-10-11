@@ -225,6 +225,7 @@ pub fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         store: Arc::new(store),
         setup_lock: tokio::sync::Mutex::new(()),
     });
+    crate::updates::tauri_backend::setup(app);
     crate::media::jobs::setup(app)?;
     crate::upload::commands::setup(app)?;
     Ok(())

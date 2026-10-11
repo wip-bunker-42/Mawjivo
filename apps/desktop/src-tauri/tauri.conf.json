@@ -28,7 +28,10 @@
     "active": true,
     "targets": ["nsis"],
     "publisher": "Mawjivo",
-    "resources": { "media-tools/": "media-tools/" },
+    "resources": {
+      "media-tools/": "media-tools/",
+      "../../../.tools/legal/": "legal/"
+    },
     "shortDescription": "النشر الشخصي والجدولة",
     "windows": {
       "nsis": {
@@ -36,7 +39,20 @@
         "languages": ["Arabic", "English"],
         "displayLanguageSelector": true
       },
-      "webviewInstallMode": { "type": "downloadBootstrapper" }
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper"
+      }
+    },
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": ["https://downloads.aimansour.com/updates/windows-x86_64.json"],
+      "windows": {
+        "installMode": "passive"
+      },
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDU3NkQxNUFFQjU3MkI1QjEKUldTeHRYSzFyaFZ0Vnp3WFZ2RktJQndvN2NSQXNSaGYvNjJGakNDdTVZWEpjUWdwaUsvWEFxVDIK",
+      "requireSignedVersion": true
     }
   }
 }
