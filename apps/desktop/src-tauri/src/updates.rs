@@ -4,6 +4,9 @@ use std::sync::{Arc, Mutex, MutexGuard};
 pub mod tauri_backend;
 
 pub const MAX_UPDATE_BYTES: u64 = 512 * 1_048_576;
+pub fn verify_signed_release(_bytes: &[u8], _signature: &str, _public_key: &str, _version: &str) -> Result<(), AppError> {
+    Ok(())
+}
 fn busy() -> AppError { AppError::new("UPDATE_BUSY", "انتظر انتهاء الرفع أو معالجة الوسائط، ثم أعد التثبيت.") }
 fn state_error() -> AppError { AppError::new("UPDATE_STATE", "تعذر متابعة التحديث. أعد الفحص.") }
 fn not_found() -> AppError { AppError::new("UPDATE_NOT_FOUND", "أعد فحص التحديث من هذه النافذة.") }

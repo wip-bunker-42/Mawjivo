@@ -2,6 +2,37 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import worker from '../download-worker.mjs';
 const origin = 'https://downloads.aimansour.com';
+test('a private repository test update is anonymously readable on its independent uncached channel', async () => {
+  const manifest = {
+    version: '0.1.1',
+    platforms: {
+      'windows-x86_64': {
+        url: origin + '/releases/0.1.1/Mawjivo-Acceptance.exe',
+        signature: 'public-signature',
+      },
+    },
+  };
+  const request = new Request(origin + '/updates/windows-x86_64-test.json');
+  assert.equal(request.headers.get('Authorization'), null);
+  const response = await worker.fetch(request, {
+    RELEASES: {
+      async get(key) {
+        assert.equal(key, 'updates/windows-x86_64-test.json');
+        return {
+          size: 1,
+          body: JSON.stringify(manifest),
+          httpEtag: '"test"',
+          writeHttpMetadata(h) {
+            h.set('Content-Type', 'application/json');
+          },
+        };
+      },
+    },
+  });
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get('Cache-Control'), 'no-store');
+  assert.deepEqual(await response.json(), manifest);
+});
 test('anonymous download access is limited to published release paths and never permits writes', async () => {
   let calls = 0;
   const env = {

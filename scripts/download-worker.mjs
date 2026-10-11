@@ -1,5 +1,5 @@
 const publishedPath =
-  /^\/(?:releases\/[0-9][A-Za-z0-9.-]{0,63}\/[A-Za-z0-9_.-]{1,180}\.(?:exe|zip|sig|json|txt)|media-tools\/[0-9][A-Za-z0-9.-]{0,100}\/(?:media-tools-win32-x64\.zip|media-tools-sources\.zip|manifest\.json)|updates\/(?:windows-x86_64|latest)\.json)$/;
+  /^\/(?:releases\/[0-9][A-Za-z0-9.-]{0,63}\/[A-Za-z0-9_.-]{1,180}\.(?:exe|zip|sig|json|txt)|media-tools\/[0-9][A-Za-z0-9.-]{0,100}\/(?:media-tools-win32-x64\.zip|media-tools-sources\.zip|manifest\.json)|updates\/(?:windows-x86_64(?:-test)?|latest)\.json)$/;
 export default {
   async fetch(request, env) {
     if (request.method !== 'GET' && request.method !== 'HEAD')

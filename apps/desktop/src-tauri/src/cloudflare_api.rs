@@ -668,6 +668,9 @@ pub fn worker_upload_metadata(
 ) -> Value {
     json!({"main_module":artifact.main_module,"compatibility_date":artifact.compatibility_date,"compatibility_flags":artifact.compatibility_flags,"bindings":bindings,"keep_bindings":["secret_text"],"tags":[state.owner_tag()],"observability":{"enabled":true,"head_sampling_rate":0.1}})
 }
-pub fn validate_remote_migrations(_artifact: &ServiceArtifact, _rows: &Value) -> Result<(), AppError> {
+pub fn validate_remote_migrations(
+    _artifact: &ServiceArtifact,
+    _rows: &Value,
+) -> Result<(), AppError> {
     Ok(())
 }

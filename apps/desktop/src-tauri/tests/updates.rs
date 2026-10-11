@@ -7,6 +7,19 @@ use rusqlite::Connection;
 use serde_json::json;
 
 #[test]
+fn signed_release_verification_checks_real_bytes_and_the_signed_version() {
+    use mawjivo_lib::updates::verify_signed_release;
+    let original = include_bytes!("../../../../tests/fixtures/update-signature/payload.bin");
+    let signature = include_str!("../../../../tests/fixtures/update-signature/payload.bin.sig").trim();
+    let public_key = include_str!("../../../../tests/fixtures/update-signature/public.key").trim();
+    verify_signed_release(original, signature, public_key, "0.1.1").unwrap();
+    let mut tampered = original.to_vec();
+    tampered[0] ^= 1;
+    assert_eq!(verify_signed_release(&tampered, signature, public_key, "0.1.1").unwrap_err().code, "UPDATE_SIGNATURE_INVALID");
+    assert_eq!(verify_signed_release(original, signature, public_key, "0.1.9").unwrap_err().code, "UPDATE_SIGNATURE_INVALID");
+}
+
+#[test]
 fn a_newer_remote_schema_is_rejected_before_deployment() {
     let artifact = ServiceArtifact::bundled().unwrap();
     let error = mawjivo_lib::cloudflare_api::validate_remote_migrations(&artifact, &json!([{"name":"0099_future.sql","sha256":"future"}])).unwrap_err();

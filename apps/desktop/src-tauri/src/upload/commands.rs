@@ -214,6 +214,9 @@ pub fn restore_uploads(
 pub fn setup(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let local = app.state::<NativeState>().store.clone();
     let store = UploadStore::new(local).map_err(|e| std::io::Error::other(e.message_ar))?;
-    app.manage(Arc::new(UploadState::with_gate(UploadEngine::new(Arc::new(store)), app.state::<crate::updates::OperationGate>().inner().clone())));
+    app.manage(Arc::new(UploadState::with_gate(
+        UploadEngine::new(Arc::new(store)),
+        app.state::<crate::updates::OperationGate>().inner().clone(),
+    )));
     Ok(())
 }

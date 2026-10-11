@@ -63,12 +63,18 @@ jobs:
           restore-keys: mawjivo-windows-rust-1.99-
       - name: Prepare verified build inputs
         shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           pnpm.cmd install --frozen-lockfile
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           pnpm.cmd service:artifact
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           pnpm.cmd media:tools
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo fetch --manifest-path apps/desktop/src-tauri/Cargo.toml --locked
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          pnpm.cmd notices
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           pnpm.cmd --filter @mawjivo/desktop build
           exit $LASTEXITCODE

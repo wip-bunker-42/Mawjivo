@@ -33,6 +33,7 @@ image = { version = "=0.25.10", default-features = false, features = ["jpeg", "p
 fs4 = { version = "=1.1.0", default-features = false, features = ["sync"] }
 tauri-plugin-dialog = "=2.8.1"
 tauri-plugin-updater = "=2.13.3"
+minisign-verify = "=0.3.0"
 unicode-segmentation = "=1.13.3"
 
 [dev-dependencies]
