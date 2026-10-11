@@ -6,6 +6,11 @@ import assert from 'node:assert/strict';
 const [basePackage, nextPackage, driverPath, edgeDriverPath, output] = process.argv.slice(2);
 if (process.platform !== 'win32' || !output) throw new Error('Windows acceptance inputs required.');
 await mkdir(output, { recursive: true });
+let stage = 'public-download';
+const mark = (value) => {
+  stage = value;
+  console.log('Acceptance stage: ' + value);
+};
 const base = JSON.parse(await readFile(join(basePackage, 'package-info.json'), 'utf8'));
 const next = JSON.parse(await readFile(join(nextPackage, 'package-info.json'), 'utf8'));
 assert.equal(base.version, '0.1.0');
@@ -23,6 +28,7 @@ const publicBytes = Buffer.from(await publicInstaller.arrayBuffer());
 assert.equal(publicBytes.length, next.bytes);
 assert.equal(createHash('sha256').update(publicBytes).digest('hex'), next.sha256);
 const installedDirectory = resolve(output, 'installed');
+mark('clean-install');
 const install = spawnSync(
   join(resolve(basePackage), base.name),
   ['/S', '/D=' + installedDirectory],
@@ -46,12 +52,19 @@ function data(mode) {
   if (result.status !== 0) throw new Error(result.stderr || 'Acceptance data utility failed.');
   return JSON.parse(result.stdout);
 }
+mark('native-data-seed');
 data('seed');
 const driver = spawn(resolve(driverPath), ['--native-driver', resolve(edgeDriverPath)], {
   stdio: ['ignore', 'pipe', 'pipe'],
   windowsHide: true,
 });
 let driverLog = '';
+driver.on('error', (error) => {
+  driverLog += '\nDriver spawn: ' + error.message;
+});
+driver.on('exit', (code, signal) => {
+  driverLog += `\nDriver exit: ${code}/${signal}`;
+});
 for (const stream of [driver.stdout, driver.stderr])
   stream.on('data', (chunk) => {
     driverLog = (driverLog + chunk).slice(-24000);
@@ -59,12 +72,17 @@ for (const stream of [driver.stdout, driver.stderr])
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 let session;
 async function request(path, method = 'GET', body) {
-  const response = await fetch('http://127.0.0.1:4444' + path, {
-    method,
-    headers: { 'Content-Type': 'application/json' },
-    body: body === undefined ? undefined : JSON.stringify(body),
-    signal: AbortSignal.timeout(30000),
-  });
+  let response;
+  try {
+    response = await fetch('http://127.0.0.1:4444' + path, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: body === undefined ? undefined : JSON.stringify(body),
+      signal: AbortSignal.timeout(path === '/session' ? 90000 : 30000),
+    });
+  } catch (error) {
+    throw new Error(`WebDriver ${method} ${path}: ${error.message}`, { cause: error });
+  }
   const result = await response.json();
   if (!response.ok || result.value?.error)
     throw new Error('WebDriver: ' + (result.value?.message ?? response.status));
@@ -101,8 +119,11 @@ async function click(text) {
 const visibleText = (text) =>
   waitFor(() => element(`//*[self::p or self::bdi][normalize-space(.)='${text}']`));
 try {
+  mark('driver-status');
   await waitFor(() => request('/status'));
+  mark('open-installed-app');
   await open();
+  mark('persist-draft');
   const text = 'مسودة محفوظة بعد التحديث الموقّع';
   const textarea = await waitFor(() =>
     element("//textarea[@id=//label[normalize-space(.)='النص أو الوصف']/@for]"),
@@ -110,15 +131,23 @@ try {
   await request(`/session/${session}/element/${textarea}/value`, 'POST', { text });
   await waitFor(async () => assert.equal(data('probe').draftText, text));
   const before = data('probe');
+  mark('check-update');
   await click('الإعدادات');
   await click('التحديثات');
   await click('فحص التحديثات');
   await visibleText('0.1.1');
+  mark('download-and-verify-update');
   await click('تنزيل التحديث');
   await visibleText('تم التحقق من التحديث. يمكنك تثبيته الآن.');
   const expectedBinaryHash = createHash('sha256')
-    .update(await readFile('apps/desktop/src-tauri/target/release/mawjivo.exe'))
+    .update(
+      await readFile(
+        process.env.MAWJIVO_ACCEPTANCE_REFERENCE_BINARY ??
+          'apps/desktop/src-tauri/target/release/mawjivo.exe',
+      ),
+    )
     .digest('hex');
+  mark('install-update');
   await click('تثبيت التحديث').catch((error) => {
     if (
       !/disconnected|invalid session|no such window|target window|connection/i.test(error.message)
@@ -136,6 +165,7 @@ try {
     150000,
   );
   const after = data('probe');
+  mark('verify-preserved-data');
   assert.equal(after.profileHash, before.profileHash);
   assert.equal(after.vaultHash, before.vaultHash);
   assert.equal(after.draftHash, before.draftHash);
@@ -154,6 +184,7 @@ try {
     },
   );
   await request(`/session/${session}`, 'DELETE').catch(() => {});
+  mark('reopen-updated-app');
   await open();
   const restored = await waitFor(() =>
     element("//textarea[@id=//label[normalize-space(.)='النص أو الوصف']/@for]"),
@@ -176,6 +207,20 @@ try {
   console.log(
     'Clean NSIS install and real signed in-app update passed; profile, draft and Windows vault preserved.',
   );
+} catch (error) {
+  await writeFile(
+    join(output, 'failure.json'),
+    JSON.stringify({ stage, error: error.message }, null, 2) + '\n',
+  );
+  if (session) {
+    await request(`/session/${session}/source`)
+      .then((source) => writeFile(join(output, 'failure.html'), source))
+      .catch(() => {});
+    await request(`/session/${session}/screenshot`)
+      .then((png) => writeFile(join(output, 'failure.png'), Buffer.from(png, 'base64')))
+      .catch(() => {});
+  }
+  throw error;
 } finally {
   if (session) await request(`/session/${session}`, 'DELETE').catch(() => {});
   driver.kill();

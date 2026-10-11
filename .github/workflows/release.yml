@@ -1,6 +1,12 @@
 name: Windows signed update acceptance
 on:
   workflow_dispatch:
+    inputs:
+      replay_run:
+        description: 'Diagnostic only: reuse installers from this workflow run; never signs or publishes'
+        required: false
+        default: ''
+        type: string
   push:
     paths: ['.github/workflows/release.yml']
 permissions:
@@ -49,6 +55,7 @@ jobs:
             mawjivo-windows-release-1.99-
             mawjivo-windows-rust-1.99-
       - name: Prepare verified resources and real notices
+        if: inputs.replay_run == ''
         shell: pwsh
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -64,6 +71,7 @@ jobs:
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
       - name: Build signed clean-install candidate
+        if: inputs.replay_run == ''
         shell: pwsh
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.MAWJIVO_TEST_SIGNING_PRIVATE_KEY }}
@@ -77,6 +85,7 @@ jobs:
           node scripts/package-windows-release.mjs apps/desktop/src-tauri/target/release/bundle/nsis .tools/acceptance-base 0.1.0 $env:GITHUB_SHA test .tools/acceptance-notes.txt
           exit $LASTEXITCODE
       - name: Build signed next-version candidate and independent verifier
+        if: inputs.replay_run == ''
         shell: pwsh
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.MAWJIVO_TEST_SIGNING_PRIVATE_KEY }}
@@ -97,12 +106,45 @@ jobs:
           node scripts/verify-release.mjs .tools/acceptance-next test
           exit $LASTEXITCODE
       - name: Publish only the verified test-channel installer
+        if: inputs.replay_run == ''
         shell: pwsh
         env:
           MAWJIVO_RELEASE_ACCOUNT_ID: ${{ vars.MAWJIVO_RELEASE_ACCOUNT_ID }}
           MAWJIVO_RELEASE_ACCESS_KEY_ID: ${{ secrets.MAWJIVO_RELEASE_ACCESS_KEY_ID }}
           MAWJIVO_RELEASE_SECRET_KEY: ${{ secrets.MAWJIVO_RELEASE_SECRET_KEY }}
         run: node scripts/publish-release.mjs .tools/acceptance-next test
+      - name: Prepare diagnostic replay of existing signed installers
+        if: inputs.replay_run != ''
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MAWJIVO_REPLAY_RUN: ${{ inputs.replay_run }}
+        run: |
+          if ($env:MAWJIVO_REPLAY_RUN -notmatch '^\d+$') { throw 'Invalid diagnostic run id.' }
+          $taskSource = gh run view $env:MAWJIVO_REPLAY_RUN --json workflowName,headSha,status | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0 -or $taskSource.workflowName -ne 'Windows signed update acceptance' -or $taskSource.status -ne 'completed') { throw 'Only a completed acceptance run in this repository can be replayed.' }
+          gh run download $env:MAWJIVO_REPLAY_RUN --name windows-signed-acceptance --dir .tools/replay
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Copy-Item -LiteralPath .tools/replay/.tools/acceptance-base -Destination .tools/acceptance-base -Recurse
+          Copy-Item -LiteralPath .tools/replay/.tools/acceptance-next -Destination .tools/acceptance-next -Recurse
+          New-Item -ItemType Directory -Force apps/desktop/src-tauri/target/release | Out-Null
+          Copy-Item .tools/replay/apps/desktop/src-tauri/target/release/*.exe apps/desktop/src-tauri/target/release/ -Force
+          foreach ($taskPackage in @('.tools/acceptance-base','.tools/acceptance-next')) {
+            $taskInfo = Get-Content -LiteralPath "$taskPackage/package-info.json" -Raw | ConvertFrom-Json
+            if ($taskInfo.sourceCommit -ne $taskSource.headSha) { throw 'Artifact source commit mismatch.' }
+            node scripts/verify-release.mjs $taskPackage test
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          if (!(Test-Path .tools/tauri-driver/bin/tauri-driver.exe)) {
+            cargo install tauri-driver --version 2.1.0 --locked --root .tools/tauri-driver
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          $taskReference = Join-Path $env:RUNNER_TEMP 'mawjivo-signed-next-reference'
+          $taskNext = Get-Content -LiteralPath .tools/acceptance-next/package-info.json -Raw | ConvertFrom-Json
+          $taskProcess = Start-Process -FilePath (Resolve-Path -LiteralPath ".tools/acceptance-next/$($taskNext.name)").Path -ArgumentList @('/S',"/D=$taskReference") -Wait -PassThru -WindowStyle Hidden
+          if ($taskProcess.ExitCode -ne 0) { throw 'Signed reference install failed.' }
+          "MAWJIVO_ACCEPTANCE_REFERENCE_BINARY=$taskReference/mawjivo.exe" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          Write-Output 'Diagnostic replay only: evidence remains bound to the original installer source commit.'
       - name: Install matching Edge WebDriver
         shell: pwsh
         run: |
@@ -131,6 +173,7 @@ jobs:
             .tools/acceptance-next/
             .tools/installed-acceptance/acceptance-proof.json
             .tools/installed-acceptance/driver.log
+            .tools/installed-acceptance/failure.*
             apps/desktop/src-tauri/target/release/verify_update.exe
             apps/desktop/src-tauri/target/release/acceptance_data.exe
             apps/desktop/src-tauri/target/release/setup.exe
