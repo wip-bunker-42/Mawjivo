@@ -225,6 +225,7 @@ export interface PublicationReceipt {
   revision: number;
   state: PublicationState;
   dueAt: ISOInstant | null;
+  canRetry?: boolean | undefined;
   targets: TargetReceipt[];
 }
 export interface PostPage {

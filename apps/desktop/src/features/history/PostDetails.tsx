@@ -33,11 +33,7 @@ export function PostDetails({
   const canCancel = detail.receipt.targets.some((target) =>
     ['ready', 'scheduled', 'preparing', 'failed'].includes(target.state),
   );
-  const canRetry =
-    !detail.receipt.targets.some((target) =>
-      ['uncertain', 'sending', 'accepted'].includes(target.state),
-    ) &&
-    detail.receipt.targets.some((target) => target.state === 'failed' && target.error?.retryable);
+  const canRetry = detail.receipt.canRetry === true;
   const shownCancel = useRef(canCancel),
     shownRetry = useRef(canRetry);
   async function act(kind: 'cancel' | 'retry') {

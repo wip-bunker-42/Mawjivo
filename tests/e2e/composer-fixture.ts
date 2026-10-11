@@ -11,6 +11,7 @@ export async function composerFixture(
     publicationState?: 'preparing' | 'scheduled' | 'accepted';
     history?: boolean;
     revisionConflict?: boolean;
+    repairedRejection?: boolean;
     olderNativeDraft?: boolean;
   } = {},
 ): Promise<void> {
@@ -200,6 +201,20 @@ export async function composerFixture(
       dueAt: scheduledPlan.dueAt,
       targets: [{ channelId: 'ch-x', platform: 'x', state: 'ready' }],
     };
+    if (options.repairedRejection)
+      Object.assign(historyReceipt, {
+        canRetry: true,
+        state: 'failed',
+        targets: [
+          { channelId: 'ch-x', platform: 'x', state: 'published', remoteId: 'already-sent' },
+          {
+            channelId: 'ch-threads',
+            platform: 'threads',
+            state: 'failed',
+            error: { code: 'PROVIDER_AUTH', messageAr: 'أعد ربط الحساب.', retryable: false },
+          },
+        ],
+      });
     if (options.history)
       drafts.set(
         'space-a',

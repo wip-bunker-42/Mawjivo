@@ -655,6 +655,15 @@ export async function getPublicationReceipt(
     workspaceId: post.workspace_id,
     revision: number,
     dueAt: plan.dueAt,
+    canRetry:
+      number === post.revision &&
+      post.cancel_requested_ms === null &&
+      !rows.some((row) => ['sending', 'accepted', 'uncertain'].includes(row.state)) &&
+      rows.some(
+        (row) =>
+          row.state === 'failed' &&
+          ((row.remote_id === null && row.claim_id === null) || row.continuation_rejected === 1),
+      ),
     state:
       number === post.revision
         ? post.state

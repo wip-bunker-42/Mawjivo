@@ -11,6 +11,30 @@ beforeEach(async () => {
 });
 afterEach(() => vi.useRealTimers());
 
+test('a_known_rejection_can_be_retried_after_repair_without_resending_successful_targets', async () => {
+  const fixture = await publicationFixture(true),
+    receipt = await submitPost(auth, await fixture.submission(), fixture.env);
+  await fixture.env.DB.prepare(
+    "UPDATE targets SET state=CASE WHEN channel_id='publish-x' THEN 'published' ELSE 'failed' END,error_json=? WHERE post_id=?",
+  )
+    .bind(
+      JSON.stringify({ code: 'PROVIDER_AUTH', messageAr: 'أعد ربط الحساب.', retryable: false }),
+      receipt.postId,
+    )
+    .run();
+  expect((await getPostDetail(auth, receipt.postId, fixture.env)).receipt).toMatchObject({
+    canRetry: true,
+  });
+  await fixture.env.DB.prepare(
+    "UPDATE targets SET state='uncertain' WHERE post_id=? AND channel_id='publish-threads'",
+  )
+    .bind(receipt.postId)
+    .run();
+  expect((await getPostDetail(auth, receipt.postId, fixture.env)).receipt).toMatchObject({
+    canRetry: false,
+  });
+});
+
 async function publishedFixture(states: PublicationState[], when = Date.now()) {
   const fixture = await publicationFixture(true),
     receipt = await submitPost(auth, await fixture.submission(), fixture.env);

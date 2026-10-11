@@ -1,5 +1,13 @@
 import { test, expect } from '@playwright/test';
 import { composerFixture } from './composer-fixture';
+
+test('a_repaired_known_rejection_offers_an_explicit_safe_retry', async ({ page }) => {
+  await composerFixture(page, { history: true, repairedRejection: true });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'المجدولة', exact: true }).click();
+  await page.getByRole('button', { name: 'تفاصيل المنشور scheduled-post' }).click();
+  await expect(page.getByRole('button', { name: 'إعادة محاولة الوجهات الآمنة' })).toBeVisible();
+});
 test('opening_a_newer_server_revision_does_not_restore_an_older_local_caption', async ({
   page,
 }) => {
