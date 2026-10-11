@@ -10,36 +10,79 @@ use serde_json::json;
 fn signed_release_verification_checks_real_bytes_and_the_signed_version() {
     use mawjivo_lib::updates::verify_signed_release;
     let original = include_bytes!("../../../../tests/fixtures/update-signature/payload.bin");
-    let signature = include_str!("../../../../tests/fixtures/update-signature/payload.bin.sig").trim();
+    let signature =
+        include_str!("../../../../tests/fixtures/update-signature/payload.bin.sig").trim();
     let public_key = include_str!("../../../../tests/fixtures/update-signature/public.key").trim();
     verify_signed_release(original, signature, public_key, "0.1.1").unwrap();
     let mut tampered = original.to_vec();
     tampered[0] ^= 1;
-    assert_eq!(verify_signed_release(&tampered, signature, public_key, "0.1.1").unwrap_err().code, "UPDATE_SIGNATURE_INVALID");
-    assert_eq!(verify_signed_release(original, signature, public_key, "0.1.9").unwrap_err().code, "UPDATE_SIGNATURE_INVALID");
+    assert_eq!(
+        verify_signed_release(&tampered, signature, public_key, "0.1.1")
+            .unwrap_err()
+            .code,
+        "UPDATE_SIGNATURE_INVALID"
+    );
+    assert_eq!(
+        verify_signed_release(original, signature, public_key, "0.1.9")
+            .unwrap_err()
+            .code,
+        "UPDATE_SIGNATURE_INVALID"
+    );
 }
 
 #[test]
 fn a_newer_remote_schema_is_rejected_before_deployment() {
     let artifact = ServiceArtifact::bundled().unwrap();
-    let error = mawjivo_lib::cloudflare_api::validate_remote_migrations(&artifact, &json!([{"name":"0099_future.sql","sha256":"future"}])).unwrap_err();
+    let error = mawjivo_lib::cloudflare_api::validate_remote_migrations(
+        &artifact,
+        &json!([{"name":"0099_future.sql","sha256":"future"}]),
+    )
+    .unwrap_err();
     assert_eq!(error.code, "SERVICE_SCHEMA_NEWER");
 }
-use mawjivo_lib::{contracts::{AppError, Draft, UpdateInfo}, profiles::migrate_local_database, updates::{AvailableUpdate, OperationGate, UpdateBackend, UpdateManager}};
 use async_trait::async_trait;
-use std::sync::{Arc, atomic::{AtomicUsize, Ordering}};
+use mawjivo_lib::{
+    contracts::{AppError, Draft, UpdateInfo},
+    profiles::migrate_local_database,
+    updates::{AvailableUpdate, OperationGate, UpdateBackend, UpdateManager},
+};
+use std::sync::{
+    Arc,
+    atomic::{AtomicUsize, Ordering},
+};
 
 #[derive(Clone)]
-struct TestUpdater { bad_signature: bool, installs: Arc<AtomicUsize> }
+struct TestUpdater {
+    bad_signature: bool,
+    installs: Arc<AtomicUsize>,
+}
 #[async_trait]
 impl UpdateBackend for TestUpdater {
     type Offer = ();
     async fn check(&self) -> Result<Option<AvailableUpdate<()>>, AppError> {
-        Ok(Some(AvailableUpdate { offer: (), info: UpdateInfo { id: String::new(), version: "0.1.1".into(), notes_ar: "تحسين حفظ المسودات.".into(), bytes: 4 } }))
+        Ok(Some(AvailableUpdate {
+            offer: (),
+            info: UpdateInfo {
+                id: String::new(),
+                version: "0.1.1".into(),
+                notes_ar: "تحسين حفظ المسودات.".into(),
+                bytes: 4,
+            },
+        }))
     }
-    async fn download(&self, _: &(), _: mawjivo_lib::updates::ProgressSink) -> Result<Vec<u8>, AppError> {
-        if self.bad_signature { Err(AppError::new("UPDATE_SIGNATURE_INVALID", "توقيع التحديث غير صالح. أعد الفحص.")) }
-        else { Ok(b"test".to_vec()) }
+    async fn download(
+        &self,
+        _: &(),
+        _: mawjivo_lib::updates::ProgressSink,
+    ) -> Result<Vec<u8>, AppError> {
+        if self.bad_signature {
+            Err(AppError::new(
+                "UPDATE_SIGNATURE_INVALID",
+                "توقيع التحديث غير صالح. أعد الفحص.",
+            ))
+        } else {
+            Ok(b"test".to_vec())
+        }
     }
     fn install(&self, _: &(), bytes: &[u8]) -> Result<(), AppError> {
         self.installs.fetch_add(1, Ordering::SeqCst);
@@ -49,7 +92,16 @@ impl UpdateBackend for TestUpdater {
 }
 fn updater(bad_signature: bool) -> (UpdateManager<TestUpdater>, Arc<AtomicUsize>) {
     let installs = Arc::new(AtomicUsize::new(0));
-    (UpdateManager::new(TestUpdater { bad_signature, installs: installs.clone() }, OperationGate::default()), installs)
+    (
+        UpdateManager::new(
+            TestUpdater {
+                bad_signature,
+                installs: installs.clone(),
+            },
+            OperationGate::default(),
+        ),
+        installs,
+    )
 }
 #[tokio::test]
 async fn a_bad_signature_never_reaches_the_installer() {
@@ -57,7 +109,10 @@ async fn a_bad_signature_never_reaches_the_installer() {
     let candidate = manager.check("main").await.unwrap().unwrap();
     let error = manager.download("main", &candidate.id).await.unwrap_err();
     assert_eq!(error.code, "UPDATE_SIGNATURE_INVALID");
-    assert_eq!(manager.install("main", &candidate.id).unwrap_err().code, "UPDATE_NOT_VERIFIED");
+    assert_eq!(
+        manager.install("main", &candidate.id).unwrap_err().code,
+        "UPDATE_NOT_VERIFIED"
+    );
     assert_eq!(calls.load(Ordering::SeqCst), 0);
 }
 #[tokio::test]
@@ -66,7 +121,10 @@ async fn active_upload_or_media_work_blocks_install_until_an_explicit_retry() {
     let candidate = manager.check("main").await.unwrap().unwrap();
     manager.download("main", &candidate.id).await.unwrap();
     let work = manager.gate.work().unwrap();
-    assert_eq!(manager.install("main", &candidate.id).unwrap_err().code, "UPDATE_BUSY");
+    assert_eq!(
+        manager.install("main", &candidate.id).unwrap_err().code,
+        "UPDATE_BUSY"
+    );
     assert_eq!(calls.load(Ordering::SeqCst), 0);
     drop(work);
     manager.install("main", &candidate.id).unwrap();
@@ -76,16 +134,32 @@ async fn active_upload_or_media_work_blocks_install_until_an_explicit_retry() {
 async fn checking_an_update_does_not_authorize_installing_without_verified_download() {
     let (manager, calls) = updater(false);
     let candidate = manager.check("main").await.unwrap().unwrap();
-    assert_eq!(manager.install("main", &candidate.id).unwrap_err().code, "UPDATE_NOT_VERIFIED");
+    assert_eq!(
+        manager.install("main", &candidate.id).unwrap_err().code,
+        "UPDATE_NOT_VERIFIED"
+    );
     assert_eq!(calls.load(Ordering::SeqCst), 0);
 }
 #[tokio::test]
 async fn update_handles_belong_only_to_the_window_that_requested_them() {
     let (manager, calls) = updater(false);
     let candidate = manager.check("main").await.unwrap().unwrap();
-    assert_eq!(manager.download("composer-other", &candidate.id).await.unwrap_err().code, "UPDATE_NOT_FOUND");
+    assert_eq!(
+        manager
+            .download("composer-other", &candidate.id)
+            .await
+            .unwrap_err()
+            .code,
+        "UPDATE_NOT_FOUND"
+    );
     manager.download("main", &candidate.id).await.unwrap();
-    assert_eq!(manager.install("composer-other", &candidate.id).unwrap_err().code, "UPDATE_NOT_FOUND");
+    assert_eq!(
+        manager
+            .install("composer-other", &candidate.id)
+            .unwrap_err()
+            .code,
+        "UPDATE_NOT_FOUND"
+    );
     assert_eq!(calls.load(Ordering::SeqCst), 0);
 }
 #[test]
@@ -96,19 +170,50 @@ fn a_failed_migration_preserves_the_draft_vault_reference_and_consistent_backup(
     let store = LocalStore::open(&path).unwrap();
     let state = ProvisionState::new("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
     store.save_state(&state).unwrap();
-    let original: Draft = serde_json::from_str(include_str!("../../../../packages/core/test/contract-fixture.json")).unwrap();
-    store.save_draft(&state.profile.id, "main", &original).unwrap();
+    let original: Draft = serde_json::from_str(include_str!(
+        "../../../../packages/core/test/contract-fixture.json"
+    ))
+    .unwrap();
+    store
+        .save_draft(&state.profile.id, "main", &original)
+        .unwrap();
     drop(store);
     let mut db = Connection::open(&path).unwrap();
-    let error = migrate_local_database(&mut db, &backup, 3, "UPDATE drafts SET body='lost'; CREATE TABLE invalid(; ").unwrap_err();
+    let error = migrate_local_database(
+        &mut db,
+        &backup,
+        3,
+        "UPDATE drafts SET body='lost'; CREATE TABLE invalid(; ",
+    )
+    .unwrap_err();
     assert_eq!(error.code, "LOCAL_MIGRATION_FAILED");
     drop(db);
     let store = LocalStore::open(&path).unwrap();
-    assert_eq!(store.load_draft(&state.profile.id, &original.workspace_id, &original.id).unwrap(), Some(original.clone()));
-    assert_eq!(store.get_state(&state.profile.id).unwrap().profile.device_credential_ref, state.profile.device_credential_ref);
+    assert_eq!(
+        store
+            .load_draft(&state.profile.id, &original.workspace_id, &original.id)
+            .unwrap(),
+        Some(original.clone())
+    );
+    assert_eq!(
+        store
+            .get_state(&state.profile.id)
+            .unwrap()
+            .profile
+            .device_credential_ref,
+        state.profile.device_credential_ref
+    );
     let restored = LocalStore::open(&backup).unwrap();
-    assert_eq!(restored.load_draft(&state.profile.id, &original.workspace_id, &original.id).unwrap(), Some(original));
-    assert_eq!(restored.get_state(&state.profile.id).unwrap().profile, state.profile);
+    assert_eq!(
+        restored
+            .load_draft(&state.profile.id, &original.workspace_id, &original.id)
+            .unwrap(),
+        Some(original)
+    );
+    assert_eq!(
+        restored.get_state(&state.profile.id).unwrap().profile,
+        state.profile
+    );
 }
 
 #[test]

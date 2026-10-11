@@ -2461,6 +2461,7 @@ dependencies = [
  "getrandom 0.4.3",
  "image",
  "keyring",
+ "minisign-verify",
  "reqwest",
  "rusqlite",
  "serde",

@@ -177,7 +177,8 @@ impl LocalStore {
         Ok(Self { db: Mutex::new(db) })
     }
     pub fn backup(&self, path: &Path) -> Result<(), AppError> {
-        consistent_backup(&self.lock()?, path)
+        let db = self.lock()?;
+        consistent_backup(&db, path)
     }
     pub(crate) fn lock(&self) -> Result<MutexGuard<'_, Connection>, AppError> {
         self.db.lock().map_err(storage_error)
