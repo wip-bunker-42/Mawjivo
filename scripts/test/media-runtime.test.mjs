@@ -17,7 +17,8 @@ for (const format of ['avif', 'jxl']) {
       const temporary = await mkdtemp(join(tmpdir(), 'mawjivo-media-acceptance-'));
       try {
         const output = join(temporary, 'blue.jpg');
-        const conversion = spawnSync(
+        const decoded = join(temporary, 'decoded.png');
+        const bridge = spawnSync(
           join(directory, 'ffmpeg.exe'),
           [
             '-hide_banner',
@@ -25,6 +26,25 @@ for (const format of ['avif', 'jxl']) {
             'error',
             '-i',
             source,
+            '-frames:v',
+            '1',
+            '-update',
+            '1',
+            '-f',
+            'image2',
+            decoded,
+          ],
+          { encoding: 'utf8', windowsHide: true, timeout: 30_000 },
+        );
+        assert.equal(bridge.status, 0, bridge.stderr);
+        const conversion = spawnSync(
+          join(directory, 'ffmpeg.exe'),
+          [
+            '-hide_banner',
+            '-loglevel',
+            'error',
+            '-i',
+            decoded,
             '-frames:v',
             '1',
             '-pix_fmt',

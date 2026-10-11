@@ -1,6 +1,7 @@
 {
   "target": "win32-x64",
-  "ffmpegVersion": "9.0.2-24-gfd5d616c29-mawjivo",
+  "ffmpegVersion": "9.0.2-24-gfd5d616c29-mawjivo.1",
+  "ffmpegExtraVersion": "mawjivo.1",
   "ffmpegCommit": "fd5d616c294faef421ca1c8b28cb0f6560fd5f31",
   "openh264Version": "2.6.0",
   "archives": {
@@ -59,11 +60,17 @@
       "url": "https://github.com/Kitware/CMake/releases/download/v4.4.4/cmake-4.4.4-linux-x86_64.tar.gz",
       "format": "tar.gz",
       "sha256": "e5bb807f7728cb60cd8b27ebc97a2edb469b68655f21e844a600c3575b76f5bb"
+    },
+    "zlibng": {
+      "url": "https://codeload.github.com/zlib-ng/zlib-ng/tar.gz/12731092979c6d07f42da27da673a9f6c7b13586",
+      "format": "tar.gz",
+      "sha256": "a0d2a5d122c84b56a793a1553a9c3327fb2eb7469bf7a86b79e3c7be5d92e8d6"
     }
   },
   "dav1dVersion": "1.5.4",
   "jpegxlVersion": "0.12.0",
   "mesonVersion": "1.12.1",
   "ninjaVersion": "1.13.2",
-  "cmakeVersion": "4.4.4"
+  "cmakeVersion": "4.4.4",
+  "zlibngVersion": "2.3.3"
 }

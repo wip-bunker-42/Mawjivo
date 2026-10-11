@@ -31,6 +31,8 @@ task_jxl="$(find "$task_build/src/jxl" -mindepth 1 -maxdepth 1 -type d | head -n
 task_meson="$(find "$task_build/src/meson" -mindepth 1 -maxdepth 1 -type d | head -n 1)"
 task_ninja="$(find "$task_build/src/ninja" -mindepth 1 -maxdepth 1 -type d | head -n 1)"
 task_cmake="$(find "$task_build/src/cmake" -mindepth 1 -maxdepth 1 -type d | head -n 1)"
+task_zlibng="$(find "$task_build/src/zlibng" -mindepth 1 -maxdepth 1 -type d | head -n 1)"
+task_extra_version="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["ffmpegExtraVersion"])' "$task_root/tools/media-build.json")"
 export PATH="$task_build/host/bin:$task_llvm/bin:$task_cmake/bin:$PATH"
 if [ ! -x "$task_build/host/bin/nasm" ]; then
   (cd "$task_nasm" && ./configure --prefix="$task_build/host" && make -j2 && make install)
@@ -42,6 +44,15 @@ if [ ! -x "$task_build/host/bin/ninja" ]; then
 fi
 export PKG_CONFIG_PATH="$task_prefix/lib/pkgconfig"
 export PKG_CONFIG_LIBDIR="$task_prefix/lib/pkgconfig"
+cmake -S "$task_zlibng" -B "$task_build/zlibng-build" -G Ninja \
+  -DCMAKE_SYSTEM_NAME=Windows -DCMAKE_C_COMPILER=x86_64-w64-mingw32-clang \
+  -DCMAKE_CXX_COMPILER=x86_64-w64-mingw32-clang++ -DCMAKE_RC_COMPILER=x86_64-w64-mingw32-windres \
+  -DCMAKE_AR=llvm-ar -DCMAKE_RANLIB=llvm-ranlib -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_INSTALL_PREFIX="$task_prefix" -DCMAKE_INSTALL_LIBDIR=lib \
+  -DBUILD_SHARED_LIBS=OFF -DBUILD_TESTING=OFF -DZLIB_COMPAT=ON -DINSTALL_UTILS=OFF \
+  -DWITH_NATIVE_INSTRUCTIONS=OFF -DWITH_RUNTIME_CPU_DETECTION=ON
+cmake --build "$task_build/zlibng-build" --parallel 2
+cmake --install "$task_build/zlibng-build"
 cat > "$task_build/windows-cross.ini" <<EOF
 [binaries]
 c = 'x86_64-w64-mingw32-clang'
@@ -84,7 +95,8 @@ cmake --install "$task_build/jxl-build"
 # An archive nested in our Git checkout must not inherit Mawjivo's Git revision.
 python3 - "$task_root/tools/media-build.json" "$task_ffmpeg/VERSION" <<'PY'
 import json,pathlib,sys
-version=json.loads(pathlib.Path(sys.argv[1]).read_text())['ffmpegVersion'].removesuffix('-mawjivo')
+config=json.loads(pathlib.Path(sys.argv[1]).read_text())
+version=config['ffmpegVersion'].removesuffix('-'+config['ffmpegExtraVersion'])
 pathlib.Path(sys.argv[2]).write_text(version+'\n')
 PY
 cd "$task_ffmpeg"
@@ -92,11 +104,11 @@ cd "$task_ffmpeg"
   --prefix="$task_prefix" --arch=x86_64 --target-os=mingw32 --enable-cross-compile \
   --cross-prefix=x86_64-w64-mingw32- --cc=x86_64-w64-mingw32-clang --cxx=x86_64-w64-mingw32-clang++ \
   --ld=x86_64-w64-mingw32-clang --ar=llvm-ar --nm=llvm-nm --ranlib=llvm-ranlib \
-  --disable-autodetect --enable-libopenh264 --enable-libdav1d --enable-libjxl --enable-shared --disable-static \
+  --disable-autodetect --enable-libopenh264 --enable-libdav1d --enable-libjxl --enable-zlib --enable-shared --disable-static \
   --enable-version3 --disable-gpl --disable-nonfree --disable-doc --disable-debug \
   --disable-network --disable-ffplay --pkg-config=pkg-config --pkg-config-flags=--static \
   --extra-cflags="-I$task_prefix/include" --extra-ldflags="-L$task_prefix/lib -static" \
-  --extra-libs=-lstdc++ --extra-version=mawjivo
+  --extra-libs=-lstdc++ --extra-version="$task_extra_version"
 make -j2
 make install
 python3 - "$task_root" "$task_build" "$task_ffmpeg" "$task_openh264" "$task_llvm" <<'PY'
@@ -109,7 +121,7 @@ for file in (build/'prefix'/'bin').iterdir():
 shutil.copy(ffmpeg/'COPYING.LGPLv3',package/'LICENSE.txt')
 licenses=package/'licenses';licenses.mkdir(exist_ok=True)
 shutil.copy(openh264/'LICENSE',licenses/'OpenH264.txt')
-for name in ('dav1d','jxl','brotli','highway','skcms'):
+for name in ('dav1d','jxl','brotli','highway','skcms','zlibng'):
     source=next((build/'src'/name).iterdir())
     legal=[p for p in source.iterdir() if p.is_file() and p.name.upper().startswith(('LICENSE','COPYING','NOTICE','AUTHORS','PATENTS'))]
     if not legal: raise SystemExit('Missing dependency license: '+name)
@@ -142,7 +154,7 @@ with zipfile.ZipFile(sources,'w',zipfile.ZIP_STORED) as output:
     output.write(build/'jxl-build/CMakeCache.txt','jxl-CMakeCache.txt')
     version=(ffmpeg/'VERSION').read_text().strip()
     output.writestr('changes.diff','--- /dev/null\n+++ b/VERSION\n@@ -0,0 +1 @@\n+'+version+'\n')
-    output.writestr('README.txt','Exact unmodified upstream source archives for FFmpeg, OpenH264, dav1d, JPEG XL, Brotli, Highway and skcms; pinned build tools and the complete build recipe. Run scripts/build-media-tools.sh on Ubuntu 24.04 with Python 3.12, GNU make, pkg-config and standard host build utilities. The only FFmpeg source addition is the VERSION build metadata recorded in changes.diff. LGPL-3.0-or-later shared FFmpeg DLLs; no GPL or nonfree library enabled. Full runtime license texts are included in the binary archive.\n')
+    output.writestr('README.txt','Exact unmodified upstream source archives for FFmpeg, OpenH264, dav1d, JPEG XL, Brotli, Highway, skcms and zlib-ng; pinned build tools and the complete build recipe. Run scripts/build-media-tools.sh on Ubuntu 24.04 with Python 3.12, GNU make, pkg-config and standard host build utilities. The only FFmpeg source addition is the VERSION build metadata recorded in changes.diff. LGPL-3.0-or-later shared FFmpeg DLLs; no GPL or nonfree library enabled. Full runtime license texts are included in the binary archive.\n')
 digest=lambda p:hashlib.sha256(p.read_bytes()).hexdigest()
 manifest={'schemaVersion':1,'version':config['ffmpegVersion'],'license':'LGPL-3.0-or-later','upstream':'https://ffmpeg.org/','sourceCommit':config['ffmpegCommit'],'builderSource':'scripts/build-media-tools.sh','licenseSha256':digest(package/'LICENSE.txt'),'licenseFiles':{str(p.relative_to(package)):digest(p) for p in licenses.rglob('*') if p.is_file()},'sources':{'file':sources.name,'sha256':digest(sources),'bytes':sources.stat().st_size},'platforms':{'win32-x64':{'archiveRoot':package.name,'sha256':digest(binary),'files':{p.name:digest(p) for p in (package/'bin').iterdir()}}}}
 (build/'output/manifest.json').write_text(json.dumps(manifest,indent=2)+'\n')
