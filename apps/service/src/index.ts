@@ -43,9 +43,20 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     try {
       if (new URL(request.url).pathname === '/health') {
-        const initialized = await env.DB.prepare(
-          "SELECT value_json FROM service_settings WHERE key='initialized'",
-        ).first<{ value_json: string }>();
+        let initialized: { value_json: string } | null;
+        try {
+          initialized = await env.DB.prepare(
+            "SELECT value_json FROM service_settings WHERE key='initialized'",
+          ).first<{ value_json: string }>();
+        } catch {
+          return Response.json(
+            {
+              state: 'unavailable',
+              messageAr: 'تعذر فحص قاعدة الخدمة. افحص إعداد Cloudflare ثم حاول مجددًا.',
+            },
+            { status: 503, headers: { 'Cache-Control': 'no-store' } },
+          );
+        }
         if (initialized?.value_json === 'true')
           return Response.json({ state: 'ready' }, { headers: { 'Cache-Control': 'no-store' } });
         return Response.json(

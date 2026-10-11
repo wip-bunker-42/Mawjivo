@@ -87,6 +87,8 @@ jobs:
           git diff --exit-code -- apps/desktop/src-tauri/src apps/desktop/src-tauri/tests
       - name: Native smoke build and legal notices
         shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           cargo build --manifest-path apps/desktop/src-tauri/Cargo.toml --locked
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -101,6 +103,7 @@ jobs:
           path: rustfmt.patch
           retention-days: 2
       - name: Retain reviewed notices
+        if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: dependency-notices

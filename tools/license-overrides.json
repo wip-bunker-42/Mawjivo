@@ -1,0 +1,12 @@
+{
+  "selectors-0.38.0": {
+    "license": "MPL-2.0",
+    "licenseFile": "tools/licenses/MPL-2.0.txt",
+    "licenseUrl": "https://www.mozilla.org/media/MPL/2.0/index.txt",
+    "licenseSha256": "3f3d9e0024b1921b067d6f7f88deb4a60cbe7a78e76c64e3f1d7fc3b779b9d04",
+    "authors": "The Servo Project Developers",
+    "sourceUrl": "https://static.crates.io/crates/selectors/selectors-0.38.0.crate",
+    "sourceSha256": "8adfa1c298912827b8a28b223b3b874357397ae706e6190acd9bf28cee99114d",
+    "sourceRevision": "572ecba2d1600e7c3d490586692a209faf703baa"
+  }
+}
