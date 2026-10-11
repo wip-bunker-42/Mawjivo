@@ -76,6 +76,7 @@ button[aria-pressed='true'] {
   background: #44351e;
 }
 button:disabled,
+button[aria-disabled='true'],
 select:disabled {
   cursor: default;
   color: #b6c1ce;

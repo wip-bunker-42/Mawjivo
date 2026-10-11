@@ -99,8 +99,7 @@ pub fn allowed_service_request(method: &str, path: &str) -> bool {
         [_workspace, "connections", _connection] => ["PATCH", "DELETE"].contains(&method),
         [_workspace, "posts"] => ["GET", "POST"].contains(&method),
         [_workspace, "posts", _post] => ["GET", "PATCH", "DELETE"].contains(&method),
-        [_workspace, "posts", "list", filter]
-        | [_workspace, "posts", "list", filter, _cursor] => {
+        [_workspace, "posts", "list", filter] | [_workspace, "posts", "list", filter, _] => {
             method == "GET" && ["all", "scheduled", "needsAction"].contains(filter)
         }
         [_workspace, "posts", "draft", _draft] => method == "GET",

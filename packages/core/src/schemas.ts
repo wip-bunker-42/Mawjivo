@@ -116,6 +116,7 @@ export const DraftSchema: z.ZodType<Draft> = z.strictObject({
   scheduleLocal: z.string().max(100).nullable(),
   scheduleOffset: z.string().max(10).nullable(),
   createdAt: instant,
+  editingPost: z.strictObject({ postId: id, draftId: id, expectedRevision: positive }).optional(),
 });
 export const WorkspaceSchema: z.ZodType<Workspace> = z.strictObject({
   id,

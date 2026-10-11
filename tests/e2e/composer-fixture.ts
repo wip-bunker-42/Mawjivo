@@ -9,6 +9,9 @@ export async function composerFixture(
     prepareFailureOnce?: boolean;
     restoreError?: boolean;
     publicationState?: 'preparing' | 'scheduled' | 'accepted';
+    history?: boolean;
+    revisionConflict?: boolean;
+    olderNativeDraft?: boolean;
   } = {},
 ): Promise<void> {
   await page.addInitScript((options) => {
@@ -149,6 +152,61 @@ export async function composerFixture(
           },
         ]),
     };
+    const scheduledDraft = {
+      id: 'scheduled-draft',
+      workspaceId: 'space-a',
+      workspaceVersion: 1,
+      timeZone: 'Africa/Cairo',
+      revision: 7,
+      createdAt: new Date().toISOString(),
+      text: 'نص مجدول محفوظ',
+      title: '',
+      assets: [],
+      selections: ['ch-x'],
+      overrides: {},
+      scheduleLocal: null,
+      scheduleOffset: null,
+    };
+    const scheduledPlan = {
+      draftId: scheduledDraft.id,
+      workspaceId: 'space-a',
+      workspaceVersion: 1,
+      timeZone: 'Africa/Cairo',
+      revision: 3,
+      policyVersion: '2026-10-11.2',
+      capabilityVersion: 'cap-v1',
+      dueAt: new Date(Date.now() + 86400000).toISOString(),
+      notes: [],
+      excluded: [],
+      mediaRecipes: [],
+      targets: [
+        {
+          channelId: 'ch-x',
+          connectionId: 'buffer',
+          provider: 'buffer',
+          platform: 'x',
+          text: scheduledDraft.text,
+          threadParts: [],
+          altTexts: [],
+          assets: [],
+        },
+      ],
+    };
+    let historyReceipt = {
+      postId: 'scheduled-post',
+      workspaceId: 'space-a',
+      revision: 3,
+      state: 'scheduled',
+      dueAt: scheduledPlan.dueAt,
+      targets: [{ channelId: 'ch-x', platform: 'x', state: 'ready' }],
+    };
+    if (options.history)
+      drafts.set(
+        'space-a',
+        options.olderNativeDraft
+          ? { ...scheduledDraft, revision: 1, text: 'نص قديم على الجهاز' }
+          : scheduledDraft,
+      );
     Object.assign(globalThis, {
       isTauri: true,
       __MAWJIVO_TEST__: api,
@@ -246,6 +304,58 @@ export async function composerFixture(
             return null;
           if (command === 'service_request') {
             const path = String(args!.path);
+            if (path.includes('/posts/draft/')) return options.history ? historyReceipt : null;
+            if (options.history && path.includes('/posts/list/'))
+              return {
+                items:
+                  path.includes('/space-b/') ||
+                  (path.includes('/scheduled') && historyReceipt.state === 'cancelled')
+                    ? []
+                    : [historyReceipt],
+                nextCursor: null,
+              };
+            if (options.history && path.includes('/summary'))
+              return {
+                localDate: path.split('/').at(-1),
+                timeZone: 'Africa/Cairo',
+                completePosts: 1,
+                partialPosts: 1,
+                failedPosts: 0,
+                unknownPosts: 1,
+                publishedTargets: 6,
+                upcomingScheduled: historyReceipt.state === 'cancelled' ? 0 : 1,
+              };
+            if (options.history && path.endsWith('/scheduled-post/details'))
+              return {
+                receipt: historyReceipt,
+                plan: scheduledPlan,
+                sources: [],
+                preparedAssets: [],
+                editable: historyReceipt.state === 'scheduled',
+              };
+            if (options.history && path.endsWith('/scheduled-post/cancel')) {
+              historyReceipt = {
+                ...historyReceipt,
+                state: 'cancelled',
+                targets: [{ channelId: 'ch-x', platform: 'x', state: 'cancelled' }],
+              };
+              return historyReceipt;
+            }
+            if (options.history && path.endsWith('/scheduled-post') && args!.method === 'PATCH') {
+              if (options.revisionConflict)
+                throw {
+                  code: 'REVISION_CONFLICT',
+                  messageAr: 'تغير المنشور من نافذة أخرى. حدّثه قبل التعديل.',
+                  retryable: false,
+                };
+              const submission = (args!.body as any).submission;
+              historyReceipt = {
+                ...historyReceipt,
+                revision: submission.plan.revision,
+                dueAt: submission.plan.dueAt,
+              };
+              return historyReceipt;
+            }
             if (path === '/api/workspaces') return workspaces;
             if (path.endsWith('/capabilities'))
               return { version: 'cap-v1', fetchedAt: '2026-10-10T00:00:00Z', channels };

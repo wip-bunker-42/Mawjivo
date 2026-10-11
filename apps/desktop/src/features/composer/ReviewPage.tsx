@@ -7,6 +7,7 @@ export function ReviewPage({
   hash,
   ready,
   sending,
+  message,
   timeZone,
   onClose,
   onConfirm,
@@ -15,6 +16,7 @@ export function ReviewPage({
   hash: string;
   ready: boolean;
   sending: boolean;
+  message?: string | undefined;
   timeZone: string;
   onClose: () => void;
   onConfirm: () => void;
@@ -105,6 +107,7 @@ export function ReviewPage({
         </details>
       ))}
       {!ready && <p>يكتمل تجهيز الوسائط ورفعها قبل إتاحة الموافقة.</p>}
+      {message && <p className="operation-message">{message}</p>}
       <div className="button-row">
         <button type="button" className="primary" disabled={!ready || sending} onClick={onConfirm}>
           {sending ? 'جارٍ الإرسال…' : 'موافق، انشر'}

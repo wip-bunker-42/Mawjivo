@@ -2,6 +2,7 @@ import { authenticate } from './auth';
 export { PublishWorkflow } from './workflows/publish';
 import { errorResponse, ServiceError } from './errors';
 import { readControlJson } from './http';
+import { getSummary, listPosts, getPostDetail } from './history';
 import {
   submitPost,
   revisePost,
@@ -83,8 +84,44 @@ export default {
             ),
             { status: 201 },
           );
+        const listingPath =
+          /^\/api\/workspaces\/([A-Za-z0-9_-]{1,160})\/posts\/list\/(all|scheduled|needsAction)(?:\/([A-Za-z0-9_-]{1,160}))?$/.exec(
+            path,
+          );
+        if (listingPath && request.method === 'GET')
+          return Response.json(
+            await listPosts(
+              auth,
+              listingPath[1]!,
+              listingPath[2] as 'all' | 'scheduled' | 'needsAction',
+              listingPath[3],
+              env,
+            ),
+            { headers: { 'Cache-Control': 'no-store' } },
+          );
+        const summaryPath =
+          /^\/api\/workspaces\/([A-Za-z0-9_-]{1,160})\/summary\/(\d{4}-\d{2}-\d{2})$/.exec(path);
+        if (summaryPath && request.method === 'GET')
+          return Response.json(await getSummary(auth, summaryPath[1]!, summaryPath[2]!, env), {
+            headers: { 'Cache-Control': 'no-store' },
+          });
+        const draftPostPath =
+          /^\/api\/workspaces\/([A-Za-z0-9_-]{1,160})\/posts\/draft\/([A-Za-z0-9_-]{1,160})$/.exec(
+            path,
+          );
+        if (draftPostPath && request.method === 'GET') {
+          await getWorkspace(auth, draftPostPath[1]!, env);
+          const post = await env.DB.prepare(
+            'SELECT id FROM posts WHERE workspace_id=? AND draft_id=? ORDER BY created_at_ms DESC LIMIT 1',
+          )
+            .bind(draftPostPath[1]!, draftPostPath[2]!)
+            .first<{ id: string }>();
+          return Response.json(post ? await getPublicationReceipt(auth, post.id, env) : null, {
+            headers: { 'Cache-Control': 'no-store' },
+          });
+        }
         const publicationPath =
-          /^\/api\/workspaces\/([A-Za-z0-9_-]{1,160})\/posts(?:\/([A-Za-z0-9_-]{1,160})(?:\/(cancel|retry))?)?$/.exec(
+          /^\/api\/workspaces\/([A-Za-z0-9_-]{1,160})\/posts(?:\/([A-Za-z0-9_-]{1,160})(?:\/(cancel|retry|details))?)?$/.exec(
             path,
           );
         if (publicationPath) {
@@ -103,9 +140,14 @@ export default {
             const post = await postRow(auth, id, env);
             if (post.workspace_id !== workspaceId)
               throw new ServiceError('FORBIDDEN', 'المنشور لا يخص هذه المساحة.', 403);
+            if (action === 'details' && request.method === 'GET')
+              return Response.json(await getPostDetail(auth, id, env), { headers });
             if (!action && request.method === 'GET')
               return Response.json(await getPublicationReceipt(auth, id, env), { headers });
-            if ((!action && request.method === 'PATCH') || (action && request.method === 'POST')) {
+            if (
+              (!action && request.method === 'PATCH') ||
+              ((action === 'cancel' || action === 'retry') && request.method === 'POST')
+            ) {
               const body = (await readControlJson(request)) as {
                 expectedRevision?: unknown;
                 submission?: Submission;

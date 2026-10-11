@@ -169,7 +169,7 @@ async function saveReceipt(
   const error = state === 'uncertain' ? (receipt.error ?? uncertain()) : receipt.error;
   await env.DB.batch([
     env.DB.prepare(
-      "UPDATE targets SET state=?,public_url=COALESCE(?,public_url),error_json=?,next_check_ms=?,receipt_attempts=receipt_attempts+1,updated_at_ms=? WHERE post_id=? AND revision=? AND channel_id=? AND remote_id=? AND state='accepted'",
+      "UPDATE targets SET state=?,public_url=COALESCE(?,public_url),error_json=?,next_check_ms=?,receipt_attempts=receipt_attempts+1,published_at_ms=COALESCE(?,published_at_ms),updated_at_ms=? WHERE post_id=? AND revision=? AND channel_id=? AND remote_id=? AND state='accepted'",
     ).bind(
       state,
       receipt.publicUrl ?? null,
@@ -181,6 +181,11 @@ async function saveReceipt(
                 Date.now() + Math.min(3600000, 60000 * 5 ** Math.min(row.receipt_attempts, 3)),
               ).toISOString(),
           )
+        : null,
+      state === 'published'
+        ? receipt.publishedAt && Number.isFinite(Date.parse(receipt.publishedAt))
+          ? Date.parse(receipt.publishedAt)
+          : Date.now()
         : null,
       Date.now(),
       job.postId,

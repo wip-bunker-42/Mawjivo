@@ -4,8 +4,10 @@ import { SetupPage } from './features/setup/SetupPage';
 import { ConnectionsPage } from './features/settings/ConnectionsPage';
 import { WorkspaceSettings } from './features/settings/WorkspaceSettings';
 import { ComposerPage } from './features/composer/ComposerPage';
+import { ScheduledPage } from './features/history/ScheduledPage';
+import { SummaryPage } from './features/history/SummaryPage';
 import { WorkspaceSelect } from './features/workspaces/WorkspaceSelect';
-import type { Workspace } from '@mawjivo/core';
+import type { Workspace, PostDetail } from '@mawjivo/core';
 import type { ServiceProfile } from './bridge';
 import { listProfiles, serviceRequest, errorMessage, openComposerWindow } from './bridge';
 
@@ -19,6 +21,7 @@ type PageId = (typeof pages)[number]['id'];
 
 export function App(): ReactElement {
   const [page, setPage] = useState<PageId>('compose');
+  const [editing, setEditing] = useState<PostDetail | null>(null);
   const [profiles, setProfiles] = useState<ServiceProfile[]>([]),
     [workspaces, setWorkspaces] = useState<Workspace[]>([]),
     [workspaceId, setWorkspaceId] = useState('');
@@ -83,7 +86,14 @@ export function App(): ReactElement {
           </h1>
           <p className="subtitle">نشر واضح، من مكان واحد.</p>
         </div>
-        <WorkspaceSelect workspaces={workspaces} value={workspaceId} onChange={setWorkspaceId} />
+        <WorkspaceSelect
+          workspaces={workspaces}
+          value={workspaceId}
+          onChange={(id) => {
+            setEditing(null);
+            setWorkspaceId(id);
+          }}
+        />
       </header>
       <nav aria-label="صفحات التطبيق" className="navigation">
         {pages.map((item) => (
@@ -143,7 +153,23 @@ export function App(): ReactElement {
             )}
           </>
         ) : page === 'compose' && workspace ? (
-          <ComposerPage workspace={workspace} />
+          <ComposerPage
+            key={workspace.id + ':' + (editing?.receipt.postId ?? 'new')}
+            workspace={workspace}
+            editing={editing ?? undefined}
+            onReset={() => setEditing(null)}
+          />
+        ) : page === 'scheduled' && workspace ? (
+          <ScheduledPage
+            key={workspace.id}
+            workspace={workspace}
+            onEdit={(detail) => {
+              setEditing(detail);
+              setPage('compose');
+            }}
+          />
+        ) : page === 'summary' && workspace ? (
+          <SummaryPage key={workspace.id} workspace={workspace} />
         ) : (
           <section className="setup-notice" aria-labelledby="setup-heading">
             <h3 id="setup-heading">أكمل الإعداد للبدء</h3>

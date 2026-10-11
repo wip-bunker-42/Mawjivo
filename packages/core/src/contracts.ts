@@ -93,6 +93,7 @@ export interface Draft {
   scheduleLocal: string | null;
   scheduleOffset: string | null;
   createdAt: ISOInstant;
+  editingPost?: { postId: string; draftId: string; expectedRevision: number } | undefined;
 }
 export interface MediaLimits {
   mimeTypes: string[];
@@ -226,7 +227,10 @@ export interface PublicationReceipt {
   dueAt: ISOInstant | null;
   targets: TargetReceipt[];
 }
-export interface PostPage { items: PublicationReceipt[]; nextCursor: string | null }
+export interface PostPage {
+  items: PublicationReceipt[];
+  nextCursor: string | null;
+}
 export interface Summary {
   localDate: string;
   timeZone: string;

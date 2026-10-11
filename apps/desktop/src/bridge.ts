@@ -60,6 +60,9 @@ import type {
   MediaRecipe,
   PreparedAsset,
   PublicationReceipt,
+  PostPage,
+  PostDetail,
+  Summary,
   Submission,
   UploadInput,
   UploadManifest,
@@ -103,6 +106,8 @@ export const composerContext = (profileId: string, workspaceId: string) =>
   native<ComposerContext>('composer_context', { profileId, workspaceId });
 export const saveDraft = (profileId: string, windowId: string, draft: Draft) =>
   native<void>('save_draft', { profileId, windowId, draft });
+export const loadDraft = (profileId: string, workspaceId: string, draftId: string) =>
+  native<Draft | null>('load_draft', { profileId, workspaceId, draftId });
 export const pickMedia = () => native<SelectedFile[]>('pick_media');
 export const probeMedia = (fileId: string) => native<MediaAsset>('probe_media', { fileId });
 export const prepareMedia = (fileId: string, recipe: MediaRecipe) =>
@@ -169,4 +174,32 @@ export const retryPublication = (workspace: Workspace, postId: string, expectedR
     'POST',
     '/api/workspaces/' + workspace.id + '/posts/' + postId + '/retry',
     { expectedRevision },
+  );
+export const postList = (
+  workspace: Workspace,
+  filter: 'all' | 'scheduled' | 'needsAction',
+  cursor?: string,
+) =>
+  serviceRequest<PostPage>(
+    workspace.serviceProfileId,
+    'GET',
+    '/api/workspaces/' + workspace.id + '/posts/list/' + filter + (cursor ? '/' + cursor : ''),
+  );
+export const postDetail = (workspace: Workspace, postId: string) =>
+  serviceRequest<PostDetail>(
+    workspace.serviceProfileId,
+    'GET',
+    '/api/workspaces/' + workspace.id + '/posts/' + postId + '/details',
+  );
+export const draftPublication = (workspace: Workspace, draftId: string) =>
+  serviceRequest<PublicationReceipt | null>(
+    workspace.serviceProfileId,
+    'GET',
+    '/api/workspaces/' + workspace.id + '/posts/draft/' + draftId,
+  );
+export const workspaceSummary = (workspace: Workspace, localDate: string) =>
+  serviceRequest<Summary>(
+    workspace.serviceProfileId,
+    'GET',
+    '/api/workspaces/' + workspace.id + '/summary/' + localDate,
   );

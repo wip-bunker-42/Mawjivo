@@ -221,6 +221,9 @@ importers:
 
   apps/service:
     dependencies:
+      '@js-temporal/polyfill':
+        specifier: 0.5.1
+        version: 0.5.1
       '@mawjivo/core':
         specifier: workspace:*
         version: link:../../packages/core

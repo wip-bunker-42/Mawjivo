@@ -18,6 +18,7 @@ import type {
   PostPlan,
   PreparedAsset,
   Workspace,
+  PostDetail,
 } from '@mawjivo/core';
 import {
   capabilities,
@@ -32,6 +33,10 @@ import {
   saveDraft,
   startUpload,
   submitPublication,
+  revisePublication,
+  loadDraft,
+  postDetail,
+  draftPublication,
   uploadedAsset,
 } from '../../bridge';
 import type { UploadProgress } from '../../bridge';
@@ -114,7 +119,50 @@ function planError(error: unknown): string {
     )[code] ?? errorMessage(error)
   );
 }
-export function useComposer(workspace: Workspace) {
+function reviewedPlan(draft: Draft, caps: CapabilitySnapshot): PostPlan {
+  return buildPlan(
+    {
+      ...draft,
+      ...(draft.editingPost
+        ? { id: draft.editingPost.draftId, revision: draft.editingPost.expectedRevision + 1 }
+        : {}),
+    },
+    caps,
+    new Date().toISOString(),
+  );
+}
+function draftFromDetail(detail: PostDetail, workspace: Workspace): Draft {
+  const overrides: Draft['overrides'] = {};
+  for (const target of detail.plan.targets)
+    overrides[target.platform] = {
+      text: target.text,
+      altTexts: target.altTexts,
+      ...(target.threadParts.length ? { threadParts: target.threadParts } : {}),
+    };
+  const fileName = detail.plan.targets
+    .flatMap((target) => target.assets)
+    .find((asset) => asset.sentName)?.sentName;
+  return {
+    id: crypto.randomUUID(),
+    workspaceId: workspace.id,
+    workspaceVersion: workspace.version,
+    timeZone: workspace.timeZone,
+    revision: 1,
+    createdAt: new Date().toISOString(),
+    text: detail.plan.targets[0]?.text ?? '',
+    title: fileName
+      ? fileName.slice(0, fileName.lastIndexOf('.'))
+      : (detail.plan.targets.find((target) => target.title)?.title ?? ''),
+    assets: detail.sources,
+    selections: detail.plan.targets.map((target) => target.channelId),
+    overrides,
+    scheduleLocal: detail.plan.dueAt ? localTime(detail.plan.dueAt, workspace.timeZone) : null,
+    scheduleOffset: detail.plan.dueAt
+      ? Temporal.Instant.from(detail.plan.dueAt).toZonedDateTimeISO(workspace.timeZone).offset
+      : null,
+  };
+}
+export function useComposer(workspace: Workspace, editing?: PostDetail) {
   const sessions = useRef(new Map<string, Session>()),
     current = useRef<Session | null>(null),
     alive = useRef(true);
@@ -260,8 +308,42 @@ export function useComposer(workspace: Workspace) {
           capabilities(workspace),
         ]);
         if (!active) return;
-        const caps = CapabilitySnapshotSchema.parse(snapshot),
-          draft = context.draft ? DraftSchema.parse(context.draft) : newDraft(workspace, caps);
+        const caps = CapabilitySnapshotSchema.parse(snapshot);
+        let detail = editing;
+        let draft = context.draft ? DraftSchema.parse(context.draft) : newDraft(workspace, caps);
+        if (
+          editing &&
+          !(
+            draft.editingPost?.postId === editing.receipt.postId &&
+            draft.editingPost.expectedRevision === editing.receipt.revision
+          )
+        ) {
+          const saved = await loadDraft(
+            workspace.serviceProfileId,
+            workspace.id,
+            editing.plan.draftId,
+          );
+          draft =
+            saved && saved.revision === editing.plan.revision
+              ? { ...DraftSchema.parse(saved), id: crypto.randomUUID() }
+              : draftFromDetail(editing, workspace);
+          draft = {
+            ...draft,
+            editingPost: {
+              postId: editing.receipt.postId,
+              draftId: editing.plan.draftId,
+              expectedRevision: editing.receipt.revision,
+            },
+            scheduleLocal: editing.plan.dueAt
+              ? localTime(editing.plan.dueAt, workspace.timeZone)
+              : null,
+            scheduleOffset: editing.plan.dueAt
+              ? Temporal.Instant.from(editing.plan.dueAt).toZonedDateTimeISO(workspace.timeZone)
+                  .offset
+              : null,
+          };
+        } else if (draft.editingPost && !detail)
+          detail = await postDetail(workspace, draft.editingPost.postId);
         session = {
           workspace,
           windowId: context.windowId,
@@ -277,6 +359,34 @@ export function useComposer(workspace: Workspace) {
         sessions.current.set(key, session);
         current.current = session;
         persist(session);
+        if (detail) {
+          for (const prepared of detail.preparedAssets) {
+            const source = draft.assets.find((asset) => asset.id === prepared.sourceAssetId);
+            if (!source) continue;
+            session.jobs.set(jobKey(prepared.sourceAssetId, prepared.recipeId), {
+              key: jobKey(prepared.sourceAssetId, prepared.recipeId),
+              jobId: 'cloud-' + prepared.assetId,
+              fileId: prepared.sourceAssetId,
+              sourceAssetId: prepared.sourceAssetId,
+              recipeId: prepared.recipeId,
+              assetId: prepared.assetId,
+              totalBytes: source.bytes,
+              completedBytes: source.bytes,
+              elapsedMs: 0,
+              remainingMs: 0,
+              phase: 'complete',
+              label: source.originalName,
+              ready: prepared,
+            });
+          }
+        } else if (context.draft) {
+          const existing = await draftPublication(workspace, draft.id);
+          if (existing) {
+            session.lastSubmission = 'saved';
+            session.message =
+              'هذه المسودة مرتبطة بمنشور محفوظ. يمكنك تعديله من المجدولة أو بدء منشور جديد.';
+          }
+        }
       }
       const selected = session;
       unlisten = await onUploadProgress(selected.windowId, (event) => {
@@ -304,6 +414,7 @@ export function useComposer(workspace: Workspace) {
         for (const job of jobs) {
           const source = selected.draft.assets.find((a) => a.id === job.sourceAssetId);
           if (!source) continue;
+          if (selected.jobs.get(jobKey(job.sourceAssetId, job.recipeId))?.ready) continue;
           selected.jobs.set(jobKey(job.sourceAssetId, job.recipeId), {
             ...job,
             key: jobKey(job.sourceAssetId, job.recipeId),
@@ -331,7 +442,7 @@ export function useComposer(workspace: Workspace) {
       active = false;
       unlisten?.();
     };
-  }, [workspace.id, workspace.serviceProfileId]);
+  }, [workspace.id, workspace.serviceProfileId, editing?.receipt.postId]);
   const session = current.current;
   async function pick(): Promise<void> {
     if (!session) return;
@@ -515,7 +626,7 @@ export function useComposer(workspace: Workspace) {
   async function openReview(): Promise<void> {
     if (!session) return;
     try {
-      const plan = buildPlan(session.draft, session.caps, new Date().toISOString());
+      const plan = reviewedPlan(session.draft, session.caps);
       variants(session);
       if (!plan.targets.length) {
         message(session, 'لا توجد منصة مؤهلة للنشر. راجع الاختيارات ونوع المحتوى.');
@@ -540,7 +651,7 @@ export function useComposer(workspace: Workspace) {
     const owner = session;
     setSending(true);
     try {
-      const plan = buildPlan(owner.draft, owner.caps, new Date().toISOString()),
+      const plan = reviewedPlan(owner.draft, owner.caps),
         hash = await hashPlan(plan);
       if (hash !== review.hash) {
         message(owner, 'تغيرت تفاصيل المنشور. افتح المراجعة مرة أخرى.');
@@ -555,15 +666,24 @@ export function useComposer(workspace: Workspace) {
       const preparedAssets = [...unique.keys()].map((key) => owner.jobs.get(key)!.ready!);
       const submission = SubmissionSchema.parse({ plan, planHash: hash, preparedAssets });
       await owner.persist;
-      const receipt = await submitPublication(owner.workspace, submission);
+      const receipt = owner.draft.editingPost
+        ? await revisePublication(
+            owner.workspace,
+            owner.draft.editingPost.postId,
+            owner.draft.editingPost.expectedRevision,
+            submission,
+          )
+        : await submitPublication(owner.workspace, submission);
       owner.lastSubmission = hash;
       message(
         owner,
         receipt.state === 'preparing'
           ? 'حُفظ المنشور؛ لم يثبت عمل النشر بعد. ستعيد Cloudflare المحاولة تلقائيًا.'
-          : receipt.state === 'scheduled'
-            ? 'تمت جدولة المنشور في Cloudflare.'
-            : 'تم إرسال المنشور. ستتابع الخدمة نتائج المنصات.',
+          : owner.draft.editingPost
+            ? 'تم حفظ التعديل بعد المراجعة.'
+            : receipt.state === 'scheduled'
+              ? 'تمت جدولة المنشور في Cloudflare.'
+              : 'تم إرسال المنشور. ستتابع الخدمة نتائج المنصات.',
       );
       if (current.current === owner) setReview(null);
     } catch (error) {
