@@ -80,7 +80,7 @@ fn avif_and_jpegxl_convert_locally_preserving_basename_and_source() {
         std::fs::copy(fixture, &source).unwrap();
         let before = hash_file(&source).unwrap();
         assert_eq!(probe(&tools(), &source).unwrap().mime_type, mime);
-        let output = temp.path().join(format!("{extension}")).join("صورتي.jpg");
+        let output = temp.path().join(extension).join("صورتي.jpg");
         std::fs::create_dir_all(output.parent().unwrap()).unwrap();
         let info = transform(
             &tools(),

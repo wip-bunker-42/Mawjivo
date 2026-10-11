@@ -126,6 +126,10 @@ for (const crate of crates) {
 const destination = resolve('.tools/legal');
 await mkdir(destination, { recursive: true });
 await writeFile(
+  join(destination, 'windows-runtime-inventory.txt'),
+  [...crates].sort().join('\n') + '\n',
+);
+await writeFile(
   join(destination, 'notice-sources.json'),
   JSON.stringify(provenance, null, 2) + '\n',
 );
