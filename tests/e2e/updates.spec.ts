@@ -1,6 +1,23 @@
 import { test, expect } from '@playwright/test';
 import { composerFixture } from './composer-fixture';
 
+test('upgrades only the selected user service after an explicit action', async ({ page }) => {
+  await composerFixture(page);
+  await page.goto('/');
+  await page.getByRole('button', { name: 'الإعدادات', exact: true }).click();
+  await page.getByRole('button', { name: 'التحديثات', exact: true }).click();
+  const calls = () => page.evaluate(() => (globalThis as any).__MAWJIVO_TEST__.calls);
+  expect((await calls()).filter((call: any) => call.command === 'upgrade_service')).toHaveLength(0);
+  const upgrade = page.getByRole('button', { name: 'تحديث خدمة Cloudflare', exact: true });
+  await upgrade.click();
+  await expect(page.getByText('تم تحديث الخدمة. مساحاتك ومنشوراتك المجدولة محفوظة.')).toBeVisible();
+  await expect(upgrade).toBeFocused();
+  expect((await calls()).filter((call: any) => call.command === 'upgrade_service')).toEqual([
+    { command: 'upgrade_service', args: { profileId: 'profile-1', packageId: 'synthetic-service-package' } },
+  ]);
+  await expect(page.getByLabel('مساحة العمل', { exact: true })).toHaveValue('space-a');
+});
+
 test('updates require explicit check, download and install without automatic announcements or focus moves', async ({
   page,
 }) => {

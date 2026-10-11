@@ -236,6 +236,10 @@ export async function composerFixture(
         unregisterCallback: (id: number) => callbacks.delete(id),
         invoke: async (command: string, args?: Record<string, unknown>) => {
           calls.push({ command, args });
+          if (command === 'service_package_info')
+            return { id: 'synthetic-service-package', version: '0.1.1' };
+          if (command === 'upgrade_service')
+            return { id: 'profile-1', baseUrl: 'https://service.test', serviceId: 'synthetic', accountId: 'synthetic', deviceCredentialRef: 'synthetic', version: '0.1.1' };
           if (command === 'check_update')
             return options.update === 'none'
               ? null

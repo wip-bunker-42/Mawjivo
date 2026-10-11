@@ -22,6 +22,26 @@ pub trait ProvisionApi: Send + Sync {
         input: &ProvisionInput,
     ) -> Result<String, AppError>;
 }
+#[derive(serde::Serialize)]
+pub struct ServicePackageInfo {
+    pub id: String,
+    pub version: String,
+}
+pub fn service_package_info() -> Result<ServicePackageInfo, AppError> {
+    Ok(ServicePackageInfo {
+        id: crate::service_artifact::sha256(include_bytes!("../service-artifact/manifest.json")),
+        version: crate::service_artifact::ServiceArtifact::bundled()?.version,
+    })
+}
+pub async fn upgrade_with(
+    _api: &dyn ProvisionApi,
+    _vault: &dyn Vault,
+    _store: &LocalStore,
+    _profile_id: &str,
+    _package_id: &str,
+) -> Result<ServiceProfile, AppError> {
+    Err(AppError::new("SERVICE_UPGRADE_UNAVAILABLE", "تعذر تحديث الخدمة."))
+}
 pub fn validate_input(input: &ProvisionInput) -> Result<(), AppError> {
     if input.account_id.len() != 32
         || !input.account_id.bytes().all(|b| b.is_ascii_hexdigit())
