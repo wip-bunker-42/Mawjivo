@@ -179,7 +179,16 @@ export const CapabilitySnapshotSchema: z.ZodType<CapabilitySnapshot> = z.strictO
     }),
   ),
 });
-const assetUse = z.strictObject({ sourceAssetId: id, recipeId: recipeId.nullable() });
+const assetUse = z.strictObject({
+  sourceAssetId: id,
+  recipeId: recipeId.nullable(),
+  sentName: z
+    .string()
+    .min(1)
+    .max(180)
+    .regex(/^[^<>:"/\\|?*\u0000-\u001f]+$/)
+    .optional(),
+});
 const target = z.strictObject({
   channelId: id,
   connectionId: id,

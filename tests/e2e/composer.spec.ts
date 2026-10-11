@@ -1,6 +1,19 @@
 import { expect, test } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { composerFixture } from './composer-fixture';
+
+test('a_pending_dispatch_is_saved_without_claiming_a_successful_schedule', async ({ page }) => {
+  await composerFixture(page, { publicationState: 'preparing' });
+  await page.goto('/');
+  await page.getByLabel('النص أو الوصف', { exact: true }).fill('جدولة تحتاج استئنافًا');
+  await page.getByRole('checkbox', { name: 'جدولة النشر' }).check();
+  await page.getByRole('button', { name: 'مراجعة النشر' }).click();
+  await page.getByRole('button', { name: 'موافق، انشر' }).click();
+  await expect(
+    page.getByText('حُفظ المنشور؛ لم يثبت عمل النشر بعد. ستعيد Cloudflare المحاولة تلقائيًا.'),
+  ).toBeVisible();
+  await expect(page.getByText('تمت جدولة المنشور في Cloudflare.')).toHaveCount(0);
+});
 test('defaults_can_be_changed_and_schedule_starts_ten_hours_from_page_creation', async ({
   page,
 }) => {

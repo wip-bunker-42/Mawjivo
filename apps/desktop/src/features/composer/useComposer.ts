@@ -555,13 +555,15 @@ export function useComposer(workspace: Workspace) {
       const preparedAssets = [...unique.keys()].map((key) => owner.jobs.get(key)!.ready!);
       const submission = SubmissionSchema.parse({ plan, planHash: hash, preparedAssets });
       await owner.persist;
-      await submitPublication(owner.workspace, submission);
+      const receipt = await submitPublication(owner.workspace, submission);
       owner.lastSubmission = hash;
       message(
         owner,
-        plan.dueAt
-          ? 'تمت جدولة المنشور في Cloudflare.'
-          : 'تم إرسال المنشور. ستتابع الخدمة نتائج المنصات.',
+        receipt.state === 'preparing'
+          ? 'حُفظ المنشور؛ لم يثبت عمل النشر بعد. ستعيد Cloudflare المحاولة تلقائيًا.'
+          : receipt.state === 'scheduled'
+            ? 'تمت جدولة المنشور في Cloudflare.'
+            : 'تم إرسال المنشور. ستتابع الخدمة نتائج المنصات.',
       );
       if (current.current === owner) setReview(null);
     } catch (error) {

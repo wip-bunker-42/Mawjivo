@@ -144,6 +144,7 @@ export interface CapabilitySnapshot {
 export interface AssetUse {
   sourceAssetId: string;
   recipeId: string | null;
+  sentName?: string | undefined;
 }
 export interface MediaRecipe {
   id: string;

@@ -14,6 +14,9 @@
     },
   ],
   "r2_buckets": [{ "binding": "MEDIA", "bucket_name": "mawjivo-media" }],
+  "workflows": [
+    { "binding": "PUBLISH", "name": "mawjivo-publish", "class_name": "PublishWorkflow" },
+  ],
   "vars": {
     "SERVICE_ID": "local-service",
     "SERVICE_VERSION": "0.1.0",

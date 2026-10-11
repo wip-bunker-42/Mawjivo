@@ -7,9 +7,12 @@ export async function initializeService(
   auth: AuthContext,
   env: Env,
   fetcher: typeof fetch = fetch,
+  publicBaseUrl?: string,
 ): Promise<ReadinessItem[]> {
   if (auth.allowedWorkspaceIds !== '*')
     throw new ServiceError('FORBIDDEN', 'إعداد الخدمة يتطلب جهازًا مخولًا بالإدارة.', 403);
+  if (publicBaseUrl && !/^https:\/\/[^\s/?#]+$/.test(publicBaseUrl))
+    throw new ServiceError('INVALID_SERVICE_URL', 'رابط الخدمة يجب أن يكون نطاق HTTPS صالحًا.');
   const row = await env.DB.prepare(
     "SELECT value_json FROM service_settings WHERE key='owner_service_id'",
   ).first<{ value_json: string }>();
@@ -69,6 +72,12 @@ export async function initializeService(
   )
     .bind(Date.now())
     .run();
+  if (publicBaseUrl)
+    await env.DB.prepare(
+      "INSERT INTO service_settings(key,value_json,updated_at_ms) VALUES('public_base_url',?,?) ON CONFLICT(key) DO UPDATE SET value_json=excluded.value_json,updated_at_ms=excluded.updated_at_ms",
+    )
+      .bind(JSON.stringify(publicBaseUrl), Date.now())
+      .run();
   return [
     { code: 'DB', state: 'ready', messageAr: 'قاعدة البيانات جاهزة.' },
     { code: 'MEDIA', state: 'ready', messageAr: 'تخزين الوسائط جاهز.' },

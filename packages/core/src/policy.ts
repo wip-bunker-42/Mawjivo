@@ -1,6 +1,7 @@
 import twitterText from 'twitter-text';
 import { DraftSchema, CapabilitySnapshotSchema } from './schemas';
 import { resolveSchedule } from './time';
+import { videoFilename } from './filenames';
 import type {
   CapabilitySnapshot,
   Channel,
@@ -13,7 +14,7 @@ import type {
   PostPlan,
   TargetPlan,
 } from './contracts';
-export const POLICY_VERSION = '2026-10-11.1';
+export const POLICY_VERSION = '2026-10-11.2';
 const segmenter = new Intl.Segmenter('ar', { granularity: 'grapheme' });
 const names = {
   facebook: 'Facebook',
@@ -352,7 +353,19 @@ export function buildPlan(input: Draft, inputCaps: CapabilitySnapshot, now: ISOI
         );
       selected.forEach((asset, index) => {
         const recipe = makeRecipe(asset, limits);
-        target.assets.push({ sourceAssetId: asset.id, recipeId: recipe?.id ?? null });
+        const mime = recipe?.outputMimeType ?? asset.mimeType;
+        target.assets.push({
+          sourceAssetId: asset.id,
+          recipeId: recipe?.id ?? null,
+          ...(asset.kind === 'video'
+            ? {
+                sentName: videoFilename(
+                  draft.title,
+                  mime === 'video/quicktime' ? 'mov' : mime === 'video/webm' ? 'webm' : 'mp4',
+                ),
+              }
+            : {}),
+        });
         if (recipe) {
           recipes.set(recipe.id, recipe);
           if (asset.mimeType === 'image/gif' && recipe.outputMimeType === 'image/jpeg')

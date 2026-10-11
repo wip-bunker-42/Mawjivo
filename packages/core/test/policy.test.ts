@@ -6,6 +6,25 @@ import { DraftSchema, PostPlanSchema } from '../src/schemas';
 import { caps, draft, photo, video } from './fixtures';
 const now = '2026-10-09T10:00:00Z';
 describe('publication plans', () => {
+  test('the_reviewed_video_filename_uses_the_full_shared_title_before_platform_truncation', () => {
+    const title = 'ع'.repeat(120),
+      capabilities = caps();
+    const plan = buildPlan(
+      draft({ title, assets: [video(10000)], selections: ['youtube', 'x'] }),
+      capabilities,
+      now,
+    );
+    expect(plan.targets.find((target) => target.platform === 'youtube')!.title).toHaveLength(100);
+    for (const target of plan.targets)
+      expect(target.assets[0]).toHaveProperty('sentName', title + '.mp4');
+    expect(PostPlanSchema.safeParse(plan).success).toBe(true);
+    const withoutYoutube = buildPlan(
+      draft({ title, assets: [video(10000)], selections: ['x'] }),
+      capabilities,
+      now,
+    );
+    expect(withoutYoutube.targets[0]!.assets[0]).toHaveProperty('sentName', title + '.mp4');
+  });
   test('gif_to_jpeg_reports_first_frame_before_confirmation', () => {
     const source = { ...photo(), mimeType: 'image/gif' };
     const plan = buildPlan(draft({ assets: [source], selections: ['instagram'] }), caps(), now);

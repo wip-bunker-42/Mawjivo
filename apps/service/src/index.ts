@@ -1,6 +1,16 @@
 import { authenticate } from './auth';
+export { PublishWorkflow } from './workflows/publish';
 import { errorResponse, ServiceError } from './errors';
 import { readControlJson } from './http';
+import {
+  submitPost,
+  revisePost,
+  cancelPost,
+  retryPost,
+  postRow,
+  getPublicationReceipt,
+} from './posts';
+import type { Submission } from '@mawjivo/core';
 import { requireWorkspace } from './auth';
 import {
   beginUpload,
@@ -54,9 +64,12 @@ export default {
       if (path.startsWith('/api/')) {
         const auth = await authenticate(request, env);
         if (path === '/api/service/initialize' && request.method === 'POST')
-          return Response.json(await initializeService(auth, env), {
-            headers: { 'Cache-Control': 'no-store' },
-          });
+          return Response.json(
+            await initializeService(auth, env, fetch, new URL(request.url).origin),
+            {
+              headers: { 'Cache-Control': 'no-store' },
+            },
+          );
         if (path === '/api/workspaces' && request.method === 'GET')
           return Response.json(await listWorkspaces(auth, env), {
             headers: { 'Cache-Control': 'no-store' },
@@ -70,6 +83,64 @@ export default {
             ),
             { status: 201 },
           );
+        const publicationPath =
+          /^\/api\/workspaces\/([A-Za-z0-9_-]{1,160})\/posts(?:\/([A-Za-z0-9_-]{1,160})(?:\/(cancel|retry))?)?$/.exec(
+            path,
+          );
+        if (publicationPath) {
+          const workspaceId = publicationPath[1]!,
+            id = publicationPath[2],
+            action = publicationPath[3];
+          requireWorkspace(auth, workspaceId);
+          const headers = { 'Cache-Control': 'no-store' };
+          if (!id && request.method === 'POST') {
+            const submission = (await readControlJson(request)) as Submission;
+            if (submission?.plan?.workspaceId !== workspaceId)
+              throw new ServiceError('FORBIDDEN', 'المنشور لا يخص هذه المساحة.', 403);
+            return Response.json(await submitPost(auth, submission, env), { status: 201, headers });
+          }
+          if (id) {
+            const post = await postRow(auth, id, env);
+            if (post.workspace_id !== workspaceId)
+              throw new ServiceError('FORBIDDEN', 'المنشور لا يخص هذه المساحة.', 403);
+            if (!action && request.method === 'GET')
+              return Response.json(await getPublicationReceipt(auth, id, env), { headers });
+            if ((!action && request.method === 'PATCH') || (action && request.method === 'POST')) {
+              const body = (await readControlJson(request)) as {
+                expectedRevision?: unknown;
+                submission?: Submission;
+              };
+              if (
+                !body ||
+                typeof body !== 'object' ||
+                Array.isArray(body) ||
+                Object.keys(body).some(
+                  (key) => !['expectedRevision', ...(!action ? ['submission'] : [])].includes(key),
+                ) ||
+                typeof body.expectedRevision !== 'number' ||
+                !Number.isSafeInteger(body.expectedRevision) ||
+                body.expectedRevision < 1
+              )
+                throw new ServiceError(
+                  'INVALID_INPUT',
+                  'إصدار المنشور غير صالح. حدّثه قبل التغيير.',
+                );
+              const receipt =
+                action === 'cancel'
+                  ? await cancelPost(auth, id, body.expectedRevision, env)
+                  : action === 'retry'
+                    ? await retryPost(auth, id, body.expectedRevision, env)
+                    : await revisePost(
+                        auth,
+                        id,
+                        body.expectedRevision,
+                        body.submission as Submission,
+                        env,
+                      );
+              return Response.json(receipt, { headers });
+            }
+          }
+        }
         const assetPath =
           /^\/api\/workspaces\/([A-Za-z0-9_-]{1,160})\/assets(?:\/([A-Za-z0-9_-]{1,160})(?:\/(renew|complete))?)?$/.exec(
             path,

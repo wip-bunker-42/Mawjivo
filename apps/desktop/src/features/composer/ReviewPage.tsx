@@ -76,6 +76,11 @@ export function ReviewPage({
         <details key={target.channelId}>
           <summary>تفاصيل {platformNames[target.platform]}</summary>
           {target.title && <p>العنوان: {target.title}</p>}
+          {target.assets.some((asset) => asset.sentName) && (
+            <p>
+              اسم ملف الفيديو: <bdi>{target.assets.find((asset) => asset.sentName)!.sentName}</bdi>
+            </p>
+          )}
           {target.threadParts.length ? (
             <ol>
               {target.threadParts.map((part, index) => (

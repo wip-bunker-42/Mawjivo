@@ -15,12 +15,17 @@ test('initialization_checks_signed_r2_access_before_marking_ready', async () => 
     requests.push(new Request(input));
     return new Response('', { status: 200 });
   };
-  const checks = await initializeService(admin, env, fetcher);
+  const checks = await initializeService(admin, env, fetcher, 'https://mawjivo.service.test');
   expect(checks.length).toBeGreaterThanOrEqual(3);
   expect(checks.every((check) => check.state === 'ready')).toBe(true);
   expect(requests.map((request) => request.method)).toEqual(['PUT', 'DELETE']);
   expect(requests[0]!.headers.get('Authorization')).toMatch(/^AWS4-HMAC-SHA256 /);
   expect(JSON.stringify(checks)).not.toContain(env.R2_SECRET_ACCESS_KEY);
+  expect(
+    await env.DB.prepare(
+      "SELECT value_json FROM service_settings WHERE key='public_base_url'",
+    ).first('value_json'),
+  ).toBe(JSON.stringify('https://mawjivo.service.test'));
 });
 test('a_bad_r2_key_leaves_service_unready_and_foreign_marker_is_not_overwritten', async () => {
   const env = testEnv();

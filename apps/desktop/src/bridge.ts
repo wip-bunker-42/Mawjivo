@@ -138,3 +138,35 @@ export const submitPublication = (workspace: Workspace, submission: Submission) 
     '/api/workspaces/' + workspace.id + '/posts',
     submission,
   );
+export const publicationReceipt = (workspace: Workspace, postId: string) =>
+  serviceRequest<PublicationReceipt>(
+    workspace.serviceProfileId,
+    'GET',
+    '/api/workspaces/' + workspace.id + '/posts/' + postId,
+  );
+export const revisePublication = (
+  workspace: Workspace,
+  postId: string,
+  expectedRevision: number,
+  submission: Submission,
+) =>
+  serviceRequest<PublicationReceipt>(
+    workspace.serviceProfileId,
+    'PATCH',
+    '/api/workspaces/' + workspace.id + '/posts/' + postId,
+    { expectedRevision, submission },
+  );
+export const cancelPublication = (workspace: Workspace, postId: string, expectedRevision: number) =>
+  serviceRequest<PublicationReceipt>(
+    workspace.serviceProfileId,
+    'POST',
+    '/api/workspaces/' + workspace.id + '/posts/' + postId + '/cancel',
+    { expectedRevision },
+  );
+export const retryPublication = (workspace: Workspace, postId: string, expectedRevision: number) =>
+  serviceRequest<PublicationReceipt>(
+    workspace.serviceProfileId,
+    'POST',
+    '/api/workspaces/' + workspace.id + '/posts/' + postId + '/retry',
+    { expectedRevision },
+  );

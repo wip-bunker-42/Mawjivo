@@ -8,6 +8,7 @@ export async function composerFixture(
     images?: number;
     prepareFailureOnce?: boolean;
     restoreError?: boolean;
+    publicationState?: 'preparing' | 'scheduled' | 'accepted';
   } = {},
 ): Promise<void> {
   await page.addInitScript((options) => {
@@ -254,7 +255,8 @@ export async function composerFixture(
                 postId: 'posted',
                 workspaceId: submission.plan.workspaceId,
                 revision: submission.plan.revision,
-                state: 'accepted',
+                state:
+                  options.publicationState ?? (submission.plan.dueAt ? 'scheduled' : 'accepted'),
                 dueAt: submission.plan.dueAt,
                 targets: [],
               };
