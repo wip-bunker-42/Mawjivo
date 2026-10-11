@@ -226,6 +226,24 @@ export interface PublicationReceipt {
   dueAt: ISOInstant | null;
   targets: TargetReceipt[];
 }
+export interface PostPage { items: PublicationReceipt[]; nextCursor: string | null }
+export interface Summary {
+  localDate: string;
+  timeZone: string;
+  completePosts: number;
+  partialPosts: number;
+  failedPosts: number;
+  unknownPosts: number;
+  publishedTargets: number;
+  upcomingScheduled: number;
+}
+export interface PostDetail {
+  receipt: PublicationReceipt;
+  plan: PostPlan;
+  sources: MediaAsset[];
+  preparedAssets: PreparedAsset[];
+  editable: boolean;
+}
 export interface AppError {
   code: string;
   messageAr: string;

@@ -216,4 +216,24 @@ mod tests {
             "/api/workspaces/space-1/summary"
         ));
     }
+    #[test]
+    fn history_and_publication_actions_use_scoped_native_routes() {
+        for path in [
+            "/api/workspaces/space-1/posts/post-1/cancel",
+            "/api/workspaces/space-1/posts/post-1/retry",
+        ] {
+            assert!(allowed_service_request("POST", path));
+            assert!(!allowed_service_request("GET", path));
+        }
+        for path in [
+            "/api/workspaces/space-1/posts/list/scheduled",
+            "/api/workspaces/space-1/posts/list/all/cursor_123",
+            "/api/workspaces/space-1/posts/post-1/details",
+            "/api/workspaces/space-1/summary/2026-10-11",
+        ] {
+            assert!(allowed_service_request("GET", path));
+            assert!(!allowed_service_request("POST", path));
+        }
+        assert!(!allowed_service_request("GET", "/api/workspaces/space-1/posts/list/anything"));
+    }
 }
