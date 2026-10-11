@@ -130,6 +130,13 @@ pub struct PlatformOverride {
 }
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct EditingPost {
+    pub post_id: String,
+    pub draft_id: String,
+    pub expected_revision: u64,
+}
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Draft {
     pub id: String,
     pub workspace_id: String,
@@ -144,12 +151,16 @@ pub struct Draft {
     pub schedule_local: Option<String>,
     pub schedule_offset: Option<String>,
     pub created_at: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub editing_post: Option<EditingPost>,
 }
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct AssetUse {
     pub source_asset_id: String,
     pub recipe_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sent_name: Option<String>,
 }
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]

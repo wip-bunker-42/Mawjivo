@@ -94,10 +94,20 @@ pub fn allowed_service_request(method: &str, path: &str) -> bool {
         [_workspace] => ["GET", "PATCH"].contains(&method),
         [_workspace, "capabilities"] => ["GET", "POST"].contains(&method),
         [_workspace, "summary"] => method == "GET",
+        [_workspace, "summary", _date] => method == "GET",
         [_workspace, "connections"] => ["GET", "POST"].contains(&method),
         [_workspace, "connections", _connection] => ["PATCH", "DELETE"].contains(&method),
         [_workspace, "posts"] => ["GET", "POST"].contains(&method),
         [_workspace, "posts", _post] => ["GET", "PATCH", "DELETE"].contains(&method),
+        [_workspace, "posts", "list", filter]
+        | [_workspace, "posts", "list", filter, _cursor] => {
+            method == "GET" && ["all", "scheduled", "needsAction"].contains(filter)
+        }
+        [_workspace, "posts", "draft", _draft] => method == "GET",
+        [_workspace, "posts", _post, "details"] => method == "GET",
+        [_workspace, "posts", _post, action] => {
+            method == "POST" && ["cancel", "retry"].contains(action)
+        }
         _ => false,
     }
 }
@@ -234,6 +244,9 @@ mod tests {
             assert!(allowed_service_request("GET", path));
             assert!(!allowed_service_request("POST", path));
         }
-        assert!(!allowed_service_request("GET", "/api/workspaces/space-1/posts/list/anything"));
+        assert!(!allowed_service_request(
+            "GET",
+            "/api/workspaces/space-1/posts/list/anything"
+        ));
     }
 }
