@@ -40,7 +40,7 @@ export async function packageWindowsRelease({
   for await (const chunk of createReadStream(source)) hash.update(chunk);
   const name =
     channel === 'test'
-      ? `Mawjivo-Acceptance_${version}_${sourceCommit.slice(0, 8)}_x64-setup.exe`
+      ? `Mawjivo-Acceptance_${version}_${sourceCommit.slice(0, 8)}_${hash.copy().digest('hex').slice(0, 8)}_x64-setup.exe`
       : `Mawjivo_${version}_x64-setup.exe`;
   const metadata = { name, version, sourceCommit, notesAr, bytes, sha256: hash.digest('hex') };
   await mkdir(destination, { recursive: true });

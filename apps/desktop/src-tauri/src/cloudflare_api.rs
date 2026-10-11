@@ -16,7 +16,37 @@ pub struct CloudflareClient {
     token: Zeroizing<String>,
     artifact: ServiceArtifact,
 }
-pub fn validate_service_version(_remote: &str, _package: &str) -> Result<(), AppError> { Ok(()) }
+pub fn validate_service_version(remote: &str, package: &str) -> Result<(), AppError> {
+    let invalid = || {
+        AppError::new(
+            "SERVICE_VERSION_INVALID",
+            "تعذر تحديد توافق إصدار الخدمة. راجع الإعداد قبل تحديثها.",
+        )
+    };
+    let parse = |version: &str| -> Result<Vec<u64>, AppError> {
+        let parts: Vec<&str> = version.split('.').collect();
+        if parts.len() != 3 || version.len() > 64 {
+            return Err(invalid());
+        }
+        parts
+            .into_iter()
+            .map(|part| {
+                let number = part.parse::<u64>().map_err(|_| invalid())?;
+                if number.to_string() != part {
+                    return Err(invalid());
+                }
+                Ok(number)
+            })
+            .collect()
+    };
+    if parse(remote)? > parse(package)? {
+        return Err(AppError::new(
+            "SERVICE_VERSION_NEWER",
+            "الخدمة بإصدار أحدث. حدّث التطبيق قبل تحديثها.",
+        ));
+    }
+    Ok(())
+}
 fn api_error(status: u16) -> AppError {
     match status {
         401 | 403 => AppError::new(
@@ -452,16 +482,25 @@ impl ProvisionApi for CloudflareClient {
             return Ok(None);
         }
         let result = self.json_response(response).await?;
-        Ok(Some(
-            result["tags"]
+        let tags: Vec<String> = result["tags"]
+            .as_array()
+            .map(|tags| {
+                tags.iter()
+                    .filter_map(|tag| tag.as_str().map(String::from))
+                    .collect()
+            })
+            .unwrap_or_default();
+        if tags.contains(&format!("mawjivo-service:{}", self.service_id)) {
+            let version = result["bindings"]
                 .as_array()
-                .map(|tags| {
-                    tags.iter()
-                        .filter_map(|tag| tag.as_str().map(String::from))
-                        .collect()
+                .and_then(|bindings| {
+                    bindings.iter().find(|binding| binding["name"] == "SERVICE_VERSION")
                 })
-                .unwrap_or_default(),
-        ))
+                .and_then(|binding| binding["text"].as_str())
+                .unwrap_or("");
+            validate_service_version(version, &self.artifact.version)?;
+        }
+        Ok(Some(tags))
     }
     async fn database(&self, name: &str, known_id: Option<&str>) -> Result<String, AppError> {
         if let Some(id) = known_id {

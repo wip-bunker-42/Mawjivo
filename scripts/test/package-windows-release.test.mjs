@@ -21,7 +21,7 @@ test('packaging retains installer and signature bytes under a safe immutable acc
       channel: 'test',
       notesAr: 'حفظ المسودات.',
     });
-    assert.equal(metadata.name, 'Mawjivo-Acceptance_0.1.1_aaaaaaaa_x64-setup.exe');
+    assert.match(metadata.name, /^Mawjivo-Acceptance_0\.1\.1_aaaaaaaa_[a-f0-9]{8}_x64-setup\.exe$/);
     assert.equal(await readFile(join(destination, metadata.name), 'utf8'), 'MZ exact build bytes');
     assert.equal(
       await readFile(join(destination, metadata.name + '.sig'), 'utf8'),
@@ -52,6 +52,29 @@ test('packaging refuses multiple ambiguous installer outputs without publishing 
       }),
       /RELEASE_BUNDLE_AMBIGUOUS/,
     );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+test('rebuilding the same test commit never conflicts with a previously published installer', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'mawjivo-package-'));
+  try {
+    const bundle = join(root, 'bundle');
+    await mkdir(bundle);
+    const options = {
+      bundle,
+      version: '0.1.1',
+      sourceCommit: 'a'.repeat(40),
+      channel: 'test',
+      notesAr: 'تحديث.',
+    };
+    await writeFile(join(bundle, 'candidate.exe'), 'MZ first build');
+    await writeFile(join(bundle, 'candidate.exe.sig'), 'first signature');
+    const first = await packageWindowsRelease({ ...options, destination: join(root, 'first') });
+    await writeFile(join(bundle, 'candidate.exe'), 'MZ second build');
+    await writeFile(join(bundle, 'candidate.exe.sig'), 'second signature');
+    const second = await packageWindowsRelease({ ...options, destination: join(root, 'second') });
+    assert.notEqual(first.name, second.name);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

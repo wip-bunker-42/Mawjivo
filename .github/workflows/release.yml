@@ -1,6 +1,8 @@
 name: Windows signed update acceptance
 on:
   workflow_dispatch:
+  push:
+    paths: ['.github/workflows/release.yml']
 permissions:
   contents: read
   actions: read
@@ -9,6 +11,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   acceptance:
+    if: github.event_name == 'workflow_dispatch'
     runs-on: windows-2025
     timeout-minutes: 75
     steps:
@@ -67,7 +70,8 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ''
         run: |
           if (!$env:TAURI_SIGNING_PRIVATE_KEY) { throw 'Acceptance signing secret missing.' }
-          pnpm.cmd --dir apps/desktop exec tauri build --config ../../tools/acceptance-tauri.json
+          $taskAcceptanceConfig = (Resolve-Path -LiteralPath tools/acceptance-tauri.json).Path
+          pnpm.cmd --dir apps/desktop exec tauri build --config $taskAcceptanceConfig
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Set-Content .tools/acceptance-notes.txt 'اختبار حفظ المساحات والمسودات أثناء التحديث.' -Encoding utf8NoBOM
           node scripts/package-windows-release.mjs apps/desktop/src-tauri/target/release/bundle/nsis .tools/acceptance-base 0.1.0 $env:GITHUB_SHA test .tools/acceptance-notes.txt
@@ -81,9 +85,10 @@ jobs:
           node scripts/sync-version.mjs 0.1.1
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Get-ChildItem -LiteralPath apps/desktop/src-tauri/target/release/bundle/nsis -File | Remove-Item
-          pnpm.cmd --dir apps/desktop exec tauri build --config ../../tools/acceptance-tauri.json
+          $taskAcceptanceConfig = (Resolve-Path -LiteralPath tools/acceptance-tauri.json).Path
+          pnpm.cmd --dir apps/desktop exec tauri build --config $taskAcceptanceConfig
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          cargo build --manifest-path apps/desktop/src-tauri/Cargo.toml --locked --release --bin verify_update --bin acceptance_data
+          cargo build --manifest-path apps/desktop/src-tauri/Cargo.toml --locked --release --bin verify_update --bin acceptance_data --bin setup
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node scripts/package-windows-release.mjs apps/desktop/src-tauri/target/release/bundle/nsis .tools/acceptance-next 0.1.1 $env:GITHUB_SHA test .tools/acceptance-notes.txt
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -126,4 +131,5 @@ jobs:
             .tools/installed-acceptance/driver.log
             apps/desktop/src-tauri/target/release/verify_update.exe
             apps/desktop/src-tauri/target/release/acceptance_data.exe
+            apps/desktop/src-tauri/target/release/setup.exe
           retention-days: 7

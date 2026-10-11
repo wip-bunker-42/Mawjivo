@@ -44,8 +44,16 @@ fn a_newer_remote_schema_is_rejected_before_deployment() {
 fn newer_or_unknown_service_version_cannot_be_downgraded_by_older_desktop() {
     use mawjivo_lib::cloudflare_api::validate_service_version;
     validate_service_version("0.1.0", "0.1.1").unwrap();
-    assert_eq!(validate_service_version("0.2.0", "0.1.1").unwrap_err().code, "SERVICE_VERSION_NEWER");
-    assert_eq!(validate_service_version("unknown", "0.1.1").unwrap_err().code, "SERVICE_VERSION_INVALID");
+    assert_eq!(
+        validate_service_version("0.2.0", "0.1.1").unwrap_err().code,
+        "SERVICE_VERSION_NEWER"
+    );
+    assert_eq!(
+        validate_service_version("unknown", "0.1.1")
+            .unwrap_err()
+            .code,
+        "SERVICE_VERSION_INVALID"
+    );
 }
 use async_trait::async_trait;
 use mawjivo_lib::{
