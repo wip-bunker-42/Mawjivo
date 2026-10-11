@@ -54,10 +54,18 @@ function data(mode) {
 }
 mark('native-data-seed');
 data('seed');
-const driver = spawn(resolve(driverPath), ['--native-driver', resolve(edgeDriverPath)], {
-  stdio: ['ignore', 'pipe', 'pipe'],
-  windowsHide: true,
-});
+const directDriver = process.env.MAWJIVO_ACCEPTANCE_DIRECT_DRIVER === 'true';
+const driver = spawn(
+  directDriver ? resolve(edgeDriverPath) : resolve(driverPath),
+  directDriver
+    ? ['--port=4444', '--host=127.0.0.1', '--verbose', '--log-path=' + resolve(output, 'edge.log')]
+    : ['--native-driver', resolve(edgeDriverPath)],
+  {
+    stdio: ['ignore', 'pipe', 'pipe'],
+    windowsHide: true,
+    env: { ...process.env, TAURI_AUTOMATION: 'true', TAURI_WEBVIEW_AUTOMATION: 'true' },
+  },
+);
 let driverLog = '';
 driver.on('error', (error) => {
   driverLog += '\nDriver spawn: ' + error.message;
@@ -103,7 +111,15 @@ async function waitFor(operation, timeout = 45000) {
 }
 async function open() {
   const value = await request('/session', 'POST', {
-    capabilities: { alwaysMatch: { 'tauri:options': { application: app } } },
+    capabilities: {
+      alwaysMatch: directDriver
+        ? {
+            'ms:edgeChromium': true,
+            browserName: 'webview2',
+            'ms:edgeOptions': { binary: app, args: [] },
+          }
+        : { 'tauri:options': { application: app } },
+    },
   });
   session = value.sessionId;
 }
@@ -220,6 +236,21 @@ try {
       .then((png) => writeFile(join(output, 'failure.png'), Buffer.from(png, 'base64')))
       .catch(() => {});
   }
+  const diagnostics = spawnSync(
+    'powershell.exe',
+    [
+      '-NoProfile',
+      '-Command',
+      `
+    $taskProcesses = @(Get-CimInstance Win32_Process | Where-Object { $_.Name -in @('mawjivo.exe','msedgewebview2.exe','msedgedriver.exe','tauri-driver.exe') } | Select-Object Name,ProcessId,ParentProcessId,ExecutablePath);
+    $taskEvents = @(Get-WinEvent -LogName Application -MaxEvents 80 -ErrorAction SilentlyContinue | Where-Object { $_.Message -match 'mawjivo' } | Select-Object -First 5 TimeCreated,Id,ProviderName,Message);
+    $taskIntegrity = @(Get-WinEvent -LogName 'Microsoft-Windows-CodeIntegrity/Operational' -MaxEvents 80 -ErrorAction SilentlyContinue | Where-Object { $_.Message -match 'mawjivo' } | Select-Object -First 5 TimeCreated,Id,Message);
+    @{ processes=$taskProcesses; applicationEvents=$taskEvents; integrityEvents=$taskIntegrity } | ConvertTo-Json -Depth 5
+  `,
+    ],
+    { encoding: 'utf8', windowsHide: true, timeout: 15000 },
+  );
+  await writeFile(join(output, 'native-diagnostics.json'), diagnostics.stdout || '{}');
   throw error;
 } finally {
   if (session) await request(`/session/${session}`, 'DELETE').catch(() => {});
