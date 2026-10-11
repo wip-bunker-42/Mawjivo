@@ -54,14 +54,37 @@ pub fn save_draft(
     state.store.save_draft(&profile_id, &window_id, &draft)
 }
 #[tauri::command]
-pub async fn configure_monitoring(state: State<'_, NativeState>, profile_id: String, api_key: String, time_zone: String) -> Result<Value, AppError> {
+pub async fn configure_monitoring(
+    state: State<'_, NativeState>,
+    profile_id: String,
+    api_key: String,
+    time_zone: String,
+) -> Result<Value, AppError> {
     let _guard = state.setup_lock.lock().await;
-    let selected = state.store.list_states()?.into_iter().find(|item| item.profile.id == profile_id).ok_or_else(|| AppError::new("PROFILE_NOT_FOUND", "اختر خدمة Cloudflare صحيحة."))?;
+    let selected = state
+        .store
+        .list_states()?
+        .into_iter()
+        .find(|item| item.profile.id == profile_id)
+        .ok_or_else(|| AppError::new("PROFILE_NOT_FOUND", "اختر خدمة Cloudflare صحيحة."))?;
     let reference = format!("{profile_id}:healthchecks");
-    let key = Zeroizing::new(if api_key.is_empty() { SystemVault.get(&reference)? } else { api_key });
-    let input = ProvisionInput { account_id: selected.profile.account_id.clone(), api_token: SystemVault.get(&format!("{profile_id}:cloudflare"))?, r2_access_key_id: SystemVault.get(&format!("{profile_id}:r2-access"))?, r2_secret_access_key: SystemVault.get(&format!("{profile_id}:r2-secret"))?, zone_id: None, domain: None };
+    let key = Zeroizing::new(if api_key.is_empty() {
+        SystemVault.get(&reference)?
+    } else {
+        api_key
+    });
+    let input = ProvisionInput {
+        account_id: selected.profile.account_id.clone(),
+        api_token: SystemVault.get(&format!("{profile_id}:cloudflare"))?,
+        r2_access_key_id: SystemVault.get(&format!("{profile_id}:r2-access"))?,
+        r2_secret_access_key: SystemVault.get(&format!("{profile_id}:r2-secret"))?,
+        zone_id: None,
+        domain: None,
+    };
     let api = CloudflareClient::new(&input, &selected).await?;
-    let result = api.configure_monitoring(&selected, &key, &time_zone).await?;
+    let result = api
+        .configure_monitoring(&selected, &key, &time_zone)
+        .await?;
     SystemVault.set(&reference, &key)?;
     Ok(result)
 }

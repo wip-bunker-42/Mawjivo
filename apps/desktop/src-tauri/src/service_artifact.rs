@@ -38,7 +38,10 @@ impl ServiceArtifact {
             )
         })?;
         if artifact.main_module != "index.js"
-            || artifact.cron_triggers.iter().any(|cron| cron != "* * * * *")
+            || artifact
+                .cron_triggers
+                .iter()
+                .any(|cron| cron != "* * * * *")
             || artifact.modules.is_empty()
             || artifact.migrations.is_empty()
             || artifact

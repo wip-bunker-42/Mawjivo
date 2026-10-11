@@ -83,7 +83,6 @@ test('provider_error_report_has_action_and_no_secret', () => {
 });
 
 test('the_workspace_api_encrypts_bot_credentials_and_never_returns_them', async () => {
-  const context = {} as ExecutionContext;
   const saved = await service.fetch(
     requestAs(ownerToken, '/api/workspaces/workspace-a/telegram', {
       botToken,
@@ -91,7 +90,6 @@ test('the_workspace_api_encrypts_bot_credentials_and_never_returns_them', async 
       daily: true,
     }),
     testEnv(),
-    context,
   );
   expect(saved.status).toBe(200);
   expect(await saved.text()).not.toContain(botToken);
@@ -102,13 +100,11 @@ test('the_workspace_api_encrypts_bot_credentials_and_never_returns_them', async 
   const read = await service.fetch(
     requestAs(ownerToken, '/api/workspaces/workspace-a/telegram'),
     testEnv(),
-    context,
   );
   expect(await read.text()).not.toContain(botToken);
   const foreign = await service.fetch(
     requestAs(limitedToken, '/api/workspaces/workspace-b/telegram'),
     testEnv(),
-    context,
   );
   expect(foreign.status).toBe(403);
 });

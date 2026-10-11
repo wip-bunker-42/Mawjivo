@@ -21,7 +21,7 @@ export function workflowMock() {
       restart: ReturnType<typeof vi.fn>;
     }
   >();
-  const create = vi.fn(async ({ id }: { id: string }) => {
+  const create = vi.fn(async ({ id }: { id: string; params?: { receiptsOnly?: boolean } }) => {
     if (instances.has(id)) throw Object.assign(new Error('exists'), { code: 10405 });
     const instance = {
       id,
