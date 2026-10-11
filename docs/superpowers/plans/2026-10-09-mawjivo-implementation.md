@@ -215,11 +215,11 @@
 
 **Interfaces:** الواجهة تستهلك `buildPlan/hashPlan` وnative pick/probe/prepare/upload، وتنتج `Submission` فقط بعد ready assets. `open_composer_window() -> Result<String, AppError>`؛ `useComposer(workspaceId, windowId)` يحفظ Draft مستقلًا؛ backend submit يتصل في المهمة 11.
 
-- [ ] **1. اختبارات فاشلة:** defaults تطابق defaultPlatforms وتقبل إزالة/إضافة وجهة؛ video title يظل required دون YouTube؛ text/alt overrides تطابق TargetPlan؛ المراجعة تعرض مدة القص وعدد الاستبعادات والتحويل. `expect(document.activeElement).toBe(previouslyFocused)` أثناء تقدم الرفع وغياب aria-live عنه؛ `await expect(confirmButton).toBeDisabled()` حتى ready؛ `expect(editedHash).not.toBe(confirmedHash)`؛ Ctrl+Shift+N ينتج نافذتين وdraftId مختلفين، وتغيير المساحة في الأولى لا يغير الثانية.
-- [ ] **2. تشغيل الأحمر:** `pnpm test:e2e -- composer.spec.ts windows.spec.ts`؛ bridge محاكى بالواجهة، وcommand فتح النافذة يختبر native في التحقق اليدوي.
-- [ ] **3. التنفيذ:** HTML أصلي وlabels/headings وأزرار صريحة، وعنوان الفيديو المشترك وتخصيص النص/alt/سلسلة. ترتيب الصور وإزالتها، وتقسيم السلسلة آليًا أو تحرير أجزائها وترتيبها. مربع الجدولة يكشف حقله بقيمة إنشاء الصفحة +10h. تبديل المساحة يحفظ المسودة، ولا يغير نافذة أخرى. dialog المراجعة ينتقل إليه التركيز بطلب المستخدم ويعيده عند الإغلاق؛ progress لا يحمل aria-live.
-- [ ] **4. تحقق:** اختبارات keyboard/RTL والتكبير، وaxe دون أخطاء حرجة أو جسيمة، ثم تشغيل Tauri محليًا لفحص النوافذ والاختصار. فحص تفاعلي عبر مهارة agent-browser عند الحاجة، واختبار NVDA يبقى للمستخدم في التسليم.
-- [ ] **5. تسجيل:** `git commit -m "feat: add Arabic composer and explicit publication review"`.
+- [x] **1. اختبارات فاشلة:** defaults تطابق defaultPlatforms وتقبل إزالة/إضافة وجهة؛ video title يظل required دون YouTube؛ text/alt overrides تطابق TargetPlan؛ المراجعة تعرض مدة القص وعدد الاستبعادات والتحويل. `expect(document.activeElement).toBe(previouslyFocused)` أثناء تقدم الرفع وغياب aria-live عنه؛ `await expect(confirmButton).toBeDisabled()` حتى ready؛ `expect(editedHash).not.toBe(confirmedHash)`؛ Ctrl+Shift+N ينتج نافذتين وdraftId مختلفين، وتغيير المساحة في الأولى لا يغير الثانية.
+- [x] **2. تشغيل الأحمر:** `pnpm test:e2e -- composer.spec.ts windows.spec.ts`؛ bridge محاكى بالواجهة، وcommand فتح النافذة يختبر native في التحقق اليدوي.
+- [x] **3. التنفيذ:** HTML أصلي وlabels/headings وأزرار صريحة، وعنوان الفيديو المشترك وتخصيص النص/alt/سلسلة. ترتيب الصور وإزالتها، وتقسيم السلسلة آليًا أو تحرير أجزائها وترتيبها. مربع الجدولة يكشف حقله بقيمة إنشاء الصفحة +10h. تبديل المساحة يحفظ المسودة، ولا يغير نافذة أخرى. dialog المراجعة ينتقل إليه التركيز بطلب المستخدم ويعيده عند الإغلاق؛ progress لا يحمل aria-live.
+- [x] **4. تحقق:** اختبارات keyboard/RTL والتكبير، وaxe دون أخطاء حرجة أو جسيمة، ثم تشغيل Tauri محليًا لفحص النوافذ والاختصار. فحص تفاعلي عبر مهارة agent-browser عند الحاجة، واختبار NVDA يبقى للمستخدم في التسليم.
+- [x] **5. تسجيل:** `git commit -m "feat: add Arabic composer and explicit publication review"`.
 
 ### Task 11: تأكيد ذري وجدولة Workflows وتعديل وإلغاء آمن
 
