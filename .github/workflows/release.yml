@@ -88,7 +88,7 @@ jobs:
           $taskAcceptanceConfig = (Resolve-Path -LiteralPath tools/acceptance-tauri.json).Path
           pnpm.cmd --dir apps/desktop exec tauri build --config $taskAcceptanceConfig
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          cargo build --manifest-path apps/desktop/src-tauri/Cargo.toml --locked --release --bin verify_update --bin acceptance_data --bin setup
+          cargo build --manifest-path apps/desktop/src-tauri/Cargo.toml --locked --release --features operator-tools --bin verify_update --bin acceptance_data --bin setup
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node scripts/package-windows-release.mjs apps/desktop/src-tauri/target/release/bundle/nsis .tools/acceptance-next 0.1.1 $env:GITHUB_SHA test .tools/acceptance-notes.txt
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

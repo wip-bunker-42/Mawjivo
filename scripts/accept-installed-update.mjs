@@ -1,5 +1,5 @@
 import { spawn, spawnSync } from 'node:child_process';
-import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, readdir } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { createHash } from 'node:crypto';
 import assert from 'node:assert/strict';
@@ -31,6 +31,11 @@ const install = spawnSync(
 assert.equal(install.status, 0, 'Clean NSIS installation failed.');
 const app = join(installedDirectory, 'mawjivo.exe');
 await readFile(app);
+assert.deepEqual(
+  (await readdir(installedDirectory)).filter((name) => name.endsWith('.exe')).sort(),
+  ['mawjivo.exe', 'uninstall.exe'],
+  'Operator/test executables must not be bundled.',
+);
 const utility = resolve('apps/desktop/src-tauri/target/release/acceptance_data.exe');
 function data(mode) {
   const result = spawnSync(utility, [mode], {
