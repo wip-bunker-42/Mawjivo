@@ -5,11 +5,22 @@ pub mod tauri_backend;
 
 pub const MAX_UPDATE_BYTES: u64 = 512 * 1_048_576;
 pub fn verify_signed_release(
-    _bytes: &[u8],
-    _signature: &str,
-    _public_key: &str,
-    _version: &str,
+    bytes: &[u8],
+    signature: &str,
+    public_key: &str,
+    version: &str,
 ) -> Result<(), AppError> {
+    use base64::{Engine, engine::general_purpose::STANDARD};
+    let invalid = || AppError::new("UPDATE_SIGNATURE_INVALID", "توقيع التحديث غير صالح. أعد الفحص.");
+    let decode = |value: &str| -> Result<String, AppError> {
+        String::from_utf8(STANDARD.decode(value).map_err(|_| invalid())?).map_err(|_| invalid())
+    };
+    let key = minisign_verify::PublicKey::decode(&decode(public_key)?).map_err(|_| invalid())?;
+    let signature = minisign_verify::Signature::decode(&decode(signature)?).map_err(|_| invalid())?;
+    key.verify(bytes, &signature, true).map_err(|_| invalid())?;
+    // The trusted comment is covered by minisign's global signature; inspect it only after verify.
+    let signed_version = signature.trusted_comment().split('\t').find_map(|field| field.strip_prefix("version:"));
+    if signed_version != Some(version) { return Err(invalid()); }
     Ok(())
 }
 fn busy() -> AppError {

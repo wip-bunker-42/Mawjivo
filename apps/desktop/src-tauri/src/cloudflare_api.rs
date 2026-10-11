@@ -307,24 +307,14 @@ impl CloudflareClient {
     }
     async fn migrate(&self, id: &str) -> Result<(), AppError> {
         self.assert_database_owner(id).await?;
+        let table = self.query(id, "SELECT name FROM sqlite_master WHERE type='table' AND name='mawjivo_migrations'", vec![]).await?;
+        let existing = if table[0]["results"].as_array().is_some_and(|rows| !rows.is_empty()) {
+            self.query(id, "SELECT name,sha256 FROM mawjivo_migrations", vec![]).await?[0]["results"].clone()
+        } else { json!([]) };
+        validate_remote_migrations(&self.artifact, &existing)?;
         self.query(id,"CREATE TABLE IF NOT EXISTS mawjivo_migrations(name TEXT PRIMARY KEY,sha256 TEXT NOT NULL)",vec![]).await?;
         for migration in &self.artifact.migrations {
-            let existing = self
-                .query(
-                    id,
-                    "SELECT sha256 FROM mawjivo_migrations WHERE name=?",
-                    vec![migration.name.clone()],
-                )
-                .await?;
-            if let Some(hash) = existing[0]["results"][0]["sha256"].as_str() {
-                if hash != migration.sha256 {
-                    return Err(AppError::new(
-                        "MIGRATION_MISMATCH",
-                        "إصدار قاعدة البيانات لا يطابق حزمة الخدمة. استعد النسخة الصحيحة قبل المتابعة.",
-                    ));
-                }
-                continue;
-            }
+            if existing.as_array().ok_or_else(invalid_response)?.iter().any(|row| row["name"] == migration.name) { continue; }
             // Initial DDL is idempotent so a partial REST batch can safely resume.
             let sql = format!(
                 "{}\nINSERT INTO mawjivo_migrations(name,sha256) VALUES('{}','{}');",
@@ -669,8 +659,15 @@ pub fn worker_upload_metadata(
     json!({"main_module":artifact.main_module,"compatibility_date":artifact.compatibility_date,"compatibility_flags":artifact.compatibility_flags,"bindings":bindings,"keep_bindings":["secret_text"],"tags":[state.owner_tag()],"observability":{"enabled":true,"head_sampling_rate":0.1}})
 }
 pub fn validate_remote_migrations(
-    _artifact: &ServiceArtifact,
-    _rows: &Value,
+    artifact: &ServiceArtifact,
+    rows: &Value,
 ) -> Result<(), AppError> {
+    for row in rows.as_array().ok_or_else(invalid_response)? {
+        let name = row["name"].as_str().ok_or_else(invalid_response)?;
+        let migration = artifact.migrations.iter().find(|migration| migration.name == name).ok_or_else(|| AppError::new("SERVICE_SCHEMA_NEWER", "الخدمة تستخدم مخططًا أحدث. حدّث التطبيق قبل تحديث الخدمة."))?;
+        if row["sha256"].as_str() != Some(migration.sha256.as_str()) {
+            return Err(AppError::new("MIGRATION_MISMATCH", "إصدار قاعدة البيانات لا يطابق حزمة الخدمة. استعد النسخة الصحيحة قبل المتابعة."));
+        }
+    }
     Ok(())
 }
