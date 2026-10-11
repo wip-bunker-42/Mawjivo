@@ -559,7 +559,7 @@ impl ProvisionApi for CloudflareClient {
         if let Some(class) = &self.artifact.workflow_class {
             bindings.push(json!({"name":"PUBLISH","type":"workflow","workflow_name":format!("{worker}-publish"),"class_name":class}));
         }
-        let metadata = json!({"main_module":self.artifact.main_module,"compatibility_date":self.artifact.compatibility_date,"compatibility_flags":self.artifact.compatibility_flags,"bindings":bindings,"tags":[state.owner_tag()],"observability":{"enabled":true,"head_sampling_rate":0.1}});
+        let metadata = worker_upload_metadata(&self.artifact, state, bindings);
         let mut form = multipart::Form::new().part(
             "metadata",
             multipart::Part::text(metadata.to_string())
@@ -660,4 +660,11 @@ impl ProvisionApi for CloudflareClient {
             .map_err(|_| invalid_response())?;
         Ok(base_url)
     }
+}
+pub fn worker_upload_metadata(
+    artifact: &ServiceArtifact,
+    state: &ProvisionState,
+    bindings: Vec<Value>,
+) -> Value {
+    json!({"main_module":artifact.main_module,"compatibility_date":artifact.compatibility_date,"compatibility_flags":artifact.compatibility_flags,"bindings":bindings,"tags":[state.owner_tag()],"observability":{"enabled":true,"head_sampling_rate":0.1}})
 }
