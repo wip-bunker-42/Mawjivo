@@ -1,0 +1,135 @@
+name: Verify Mawjivo
+on:
+  push:
+    paths-ignore: ['docs/**', '**.md']
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      secondary:
+        description: Also check Linux and macOS native compilation
+        type: boolean
+        default: false
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  javascript:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+      - name: Install locked packages
+        run: |
+          task_pnpm=$(node -p 'require("./package.json").packageManager')
+          npm install --global "$task_pnpm"
+          pnpm install --frozen-lockfile
+      - name: Verify JavaScript, versions, secrets and Worker bundle
+        run: pnpm verify:js
+      - name: Browser acceptance
+        run: |
+          pnpm exec playwright install --with-deps chromium
+          pnpm test:e2e
+  windows:
+    runs-on: windows-2025
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+      - name: Install pinned tools
+        shell: pwsh
+        run: |
+          $taskPnpm = (Get-Content package.json -Raw | ConvertFrom-Json).packageManager
+          npm.cmd install --global $taskPnpm
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          rustup toolchain install 1.99.0 --profile minimal --component rustfmt,clippy
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            apps/desktop/src-tauri/target
+          key: mawjivo-windows-rust-1.99-full-${{ hashFiles('apps/desktop/src-tauri/Cargo.lock') }}
+          restore-keys: mawjivo-windows-rust-1.99-
+      - name: Prepare verified build inputs
+        shell: pwsh
+        run: |
+          pnpm.cmd install --frozen-lockfile
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          pnpm.cmd service:artifact
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          pnpm.cmd media:tools
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          pnpm.cmd --filter @mawjivo/desktop build
+          exit $LASTEXITCODE
+      - name: Full native suite
+        shell: pwsh
+        run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --locked --no-fail-fast
+      - name: Native lint
+        shell: pwsh
+        run: cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml --locked --all-targets -- -D warnings
+      - name: Native formatting
+        shell: pwsh
+        run: |
+          cargo fmt --manifest-path apps/desktop/src-tauri/Cargo.toml
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git diff --output=rustfmt.patch
+          git diff --exit-code -- apps/desktop/src-tauri/src apps/desktop/src-tauri/tests
+      - name: Native smoke build and legal notices
+        shell: pwsh
+        run: |
+          cargo build --manifest-path apps/desktop/src-tauri/Cargo.toml --locked
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          pnpm.cmd notices
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/check-secrets.mjs .tools/legal apps/desktop/src-tauri/service-artifact apps/desktop/dist
+      - name: Return formatting patch
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: native-formatting
+          path: rustfmt.patch
+          retention-days: 2
+      - name: Retain reviewed notices
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dependency-notices
+          path: .tools/legal/
+          retention-days: 7
+  secondary:
+    if: github.event_name == 'workflow_dispatch' && inputs.secondary
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+      - name: Linux desktop development libraries
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+      - name: Secondary native compilation
+        run: |
+          npm install --global "$(node -p 'require("./package.json").packageManager')"
+          pnpm install --frozen-lockfile
+          pnpm service:artifact
+          pnpm --filter @mawjivo/desktop build
+          mkdir -p apps/desktop/src-tauri/media-tools
+          rustup toolchain install 1.99.0 --profile minimal
+          cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml --locked --all-targets

@@ -1,4 +1,13 @@
 {
-  "verifiedAt": "2026-10-09", "node": "24.21.0", "pnpm": "12.10.1", "rust": "1.99.0", "ffmpeg": "9.0.2",
-  "sources": { "node": "https://nodejs.org/dist/index.json", "npm": "https://registry.npmjs.org", "rust": "https://static.rust-lang.org/dist/channel-rust-stable.toml", "ffmpeg": "https://ffmpeg.org/download.html" }
+  "verifiedAt": "2026-10-11",
+  "node": "24.21.0",
+  "pnpm": "12.11.2",
+  "rust": "1.99.0",
+  "ffmpeg": "9.0.2",
+  "sources": {
+    "node": "https://nodejs.org/dist/index.json",
+    "npm": "https://registry.npmjs.org",
+    "rust": "https://static.rust-lang.org/dist/channel-rust-stable.toml",
+    "ffmpeg": "https://ffmpeg.org/download.html"
+  }
 }

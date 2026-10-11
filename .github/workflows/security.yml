@@ -1,0 +1,29 @@
+name: Dependency security
+on:
+  schedule:
+    - cron: '17 6 * * 1'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+      - name: JavaScript security audit
+        run: |
+          npm install --global "$(node -p 'require("./package.json").packageManager')"
+          pnpm install --frozen-lockfile
+          pnpm check:secrets
+          pnpm audit --audit-level high
+      - name: Rust security audit
+        run: |
+          rustup toolchain install 1.99.0 --profile minimal
+          cargo install cargo-audit --locked --version 0.22.2
+          cargo audit --file apps/desktop/src-tauri/Cargo.lock

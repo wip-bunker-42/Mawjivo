@@ -1,7 +1,12 @@
 name: Reproducible media tools
 on:
   push:
-    paths: ['tools/media-build.json', 'scripts/build-media-tools.sh', '.github/workflows/media-tools.yml']
+    paths:
+      [
+        'tools/media-build.json',
+        'scripts/build-media-tools.sh',
+        '.github/workflows/media-tools.yml',
+      ]
   workflow_dispatch:
 permissions:
   contents: read

@@ -2,7 +2,7 @@
   "name": "mawjivo",
   "version": "0.1.0",
   "private": true,
-  "packageManager": "pnpm@12.10.1",
+  "packageManager": "pnpm@12.11.2",
   "engines": {
     "node": ">=24.21.0 <25"
   },
@@ -14,7 +14,14 @@
     "service:artifact": "node scripts/build-service-artifact.mjs",
     "media:tools": "node scripts/fetch-media-tools.mjs",
     "operator:setup": "node scripts/operator-setup.mjs",
-    "tauri:build": "pnpm --dir apps/desktop exec tauri build"
+    "tauri:build": "pnpm --dir apps/desktop exec tauri build",
+    "verify": "node scripts/verify.mjs",
+    "verify:js": "node scripts/verify.mjs --javascript",
+    "tools:verify": "node scripts/verify-toolchain.mjs",
+    "check:secrets": "node scripts/check-secrets.mjs",
+    "sync-version": "node scripts/sync-version.mjs",
+    "test:scripts": "node --test scripts/test/*.test.mjs",
+    "notices": "node scripts/generate-notices.mjs"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.13.0",
