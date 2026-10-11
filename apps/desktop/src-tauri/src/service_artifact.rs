@@ -56,6 +56,11 @@ impl ServiceArtifact {
 mod tests {
     use super::*;
     #[test]
+    fn bundled_service_deploys_the_minute_monitor_trigger() {
+        let manifest: serde_json::Value = serde_json::from_str(include_str!("../service-artifact/manifest.json")).unwrap();
+        assert_eq!(manifest["cronTriggers"], serde_json::json!(["* * * * *"]));
+    }
+    #[test]
     fn bundled_artifact_has_verified_modules_and_migrations() {
         assert!(ServiceArtifact::bundled().is_ok());
     }

@@ -194,6 +194,12 @@ pub fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
 mod tests {
     use super::*;
     #[test]
+    fn telegram_settings_are_scoped_to_the_native_workspace_bridge() {
+        assert!(allowed_service_request("GET", "/api/workspaces/space-1/telegram"));
+        assert!(allowed_service_request("POST", "/api/workspaces/space-1/telegram"));
+        assert!(!allowed_service_request("DELETE", "/api/workspaces/space-1/telegram"));
+    }
+    #[test]
     fn rpc_only_allows_bounded_service_paths() {
         assert!(allowed_service_request(
             "GET",
