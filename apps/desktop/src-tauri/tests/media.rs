@@ -70,6 +70,36 @@ fn png_to_jpeg_keeps_basename_and_highest_fitting_quality() {
     assert_eq!(probe(&tools(), &output).unwrap().mime_type, "image/jpeg");
 }
 #[test]
+fn avif_and_jpegxl_convert_locally_preserving_basename_and_source() {
+    let temp = tempfile::tempdir().unwrap();
+    for (extension, mime) in [("avif", "image/avif"), ("jxl", "image/jxl")] {
+        let fixture = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../../tests/fixtures/media")
+            .join(format!("blue.{extension}"));
+        let source = temp.path().join(format!("صورتي.{extension}"));
+        std::fs::copy(fixture, &source).unwrap();
+        let before = hash_file(&source).unwrap();
+        assert_eq!(probe(&tools(), &source).unwrap().mime_type, mime);
+        let output = temp.path().join(format!("{extension}")).join("صورتي.jpg");
+        std::fs::create_dir_all(output.parent().unwrap()).unwrap();
+        let info = transform(
+            &tools(),
+            request(
+                &source,
+                &output,
+                &recipe("image/jpeg"),
+                Arc::new(AtomicBool::new(false)),
+                u64::MAX,
+            ),
+        )
+        .unwrap();
+        assert_eq!((info.width, info.height), (32, 24));
+        assert_eq!(info.mime_type, "image/jpeg");
+        assert_eq!(output.file_stem(), source.file_stem());
+        assert_eq!(before, hash_file(&source).unwrap());
+    }
+}
+#[test]
 fn video_uses_title_without_renaming_source() {
     let temp = tempfile::tempdir().unwrap();
     let source = temp.path().join("source.mp4");

@@ -2,9 +2,9 @@ import { readFile, readdir, lstat, mkdir, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import { spawnSync } from 'node:child_process';
-import { createHash } from 'node:crypto';
 import { packageManagerInvocation } from './package-manager.mjs';
 import { repositoryNotices } from './repository-notices.mjs';
+import { reviewedNotice } from './reviewed-notice.mjs';
 const sections = [await readFile('THIRD_PARTY_NOTICES.md', 'utf8')];
 const overrides = JSON.parse(await readFile('tools/license-overrides.json', 'utf8'));
 async function appendLicense(directory, label) {
@@ -104,27 +104,9 @@ for (const crate of crates) {
     const manifest = await readFile(join(path, 'Cargo.toml'), 'utf8');
     const override = overrides[crate];
     if (override) {
-      const declared = /\nlicense = "([^"]+)"/.exec(manifest)?.[1];
-      const text = await readFile(override.licenseFile, 'utf8');
-      if (
-        declared !== override.license ||
-        createHash('sha256').update(text).digest('hex') !== override.licenseSha256
-      )
-        throw new Error('Reviewed license text does not match this crate.');
-      sections.push(
-        crate +
-          '\nAuthors: ' +
-          override.authors +
-          '\nUnmodified source: ' +
-          override.sourceUrl +
-          '\nSource SHA-256: ' +
-          override.sourceSha256 +
-          '\nLicense: ' +
-          override.licenseUrl +
-          '\n' +
-          text,
-      );
-      provenance.push({ crate, ...override });
+      const notice = await reviewedNotice(crate, manifest, override);
+      sections.push(notice.section);
+      provenance.push(notice.provenance);
       continue;
     }
     const repository = /\nrepository = "([^"]+)"/.exec(manifest)?.[1];

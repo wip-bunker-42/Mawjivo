@@ -19,6 +19,51 @@
     "llvm": {
       "url": "https://github.com/mstorsjo/llvm-mingw/releases/download/20261006/llvm-mingw-20261006-ucrt-ubuntu-22.04-x86_64.tar.xz",
       "sha256": "5f9c6ed95b2d4bdb2869a488c5fd5857fbdabcf288a0aa3eb1da43f6a08d8ab4"
+    },
+    "dav1d": {
+      "url": "https://download.videolan.org/pub/videolan/dav1d/1.5.4/dav1d-1.5.4.tar.xz",
+      "format": "tar.xz",
+      "sha256": "686616b7c69eb88d44459391ab25cac13b6647a3b288835c5784e71c1514a5c5"
+    },
+    "jxl": {
+      "url": "https://codeload.github.com/libjxl/libjxl/tar.gz/a7a9c787341cf703dede03c2009fa460cae5e5df",
+      "format": "tar.gz",
+      "sha256": "818398895831069902e3677d285054a7d1255b11b221e94c6aaa1cb83b0a3f29"
+    },
+    "brotli": {
+      "url": "https://codeload.github.com/google/brotli/tar.gz/028fb5a23661f123017c060daa546b55cf4bde29",
+      "format": "tar.gz",
+      "sha256": "0afe09a53c8bad9861c8dd1fc1284308d54f19d2979ba3541cfdcc9b05fe360f"
+    },
+    "highway": {
+      "url": "https://codeload.github.com/google/highway/tar.gz/457c891775a7397bdb0376bb1031e6e027af1c48",
+      "format": "tar.gz",
+      "sha256": "5124b0501c98d9930dbb065bfa1a5bbbd59ce0f12facb7e1e33aaef01a5f1f1a"
+    },
+    "skcms": {
+      "url": "https://codeload.github.com/google/skcms/tar.gz/96d9171c94b937a1b5f0293de7309ac16311b722",
+      "format": "tar.gz",
+      "sha256": "9bb4b5bba0b7c04f6c2bce9ff713d61e23c9a20c4945161ae16290498ad74627"
+    },
+    "meson": {
+      "url": "https://github.com/mesonbuild/meson/releases/download/1.12.1/meson-1.12.1.tar.gz",
+      "format": "tar.gz",
+      "sha256": "ab0a6ca09f8ef70c564c8241fb5a23957886a0b53fb58412b5e07eaf07dba743"
+    },
+    "ninja": {
+      "url": "https://codeload.github.com/ninja-build/ninja/tar.gz/refs/tags/v1.13.2",
+      "format": "tar.gz",
+      "sha256": "974d6b2f4eeefa25625d34da3cb36bdcebe7fbce40f4c16ac0835fd1c0cbae17"
+    },
+    "cmake": {
+      "url": "https://github.com/Kitware/CMake/releases/download/v4.4.4/cmake-4.4.4-linux-x86_64.tar.gz",
+      "format": "tar.gz",
+      "sha256": "e5bb807f7728cb60cd8b27ebc97a2edb469b68655f21e844a600c3575b76f5bb"
     }
-  }
+  },
+  "dav1dVersion": "1.5.4",
+  "jpegxlVersion": "0.12.0",
+  "mesonVersion": "1.12.1",
+  "ninjaVersion": "1.13.2",
+  "cmakeVersion": "4.4.4"
 }
