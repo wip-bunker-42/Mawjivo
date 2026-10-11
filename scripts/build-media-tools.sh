@@ -120,6 +120,7 @@ for file in (build/'prefix'/'bin').iterdir():
     if file.suffix in ('.exe','.dll'): shutil.copy(file,package/'bin'/file.name)
 shutil.copy(ffmpeg/'COPYING.LGPLv3',package/'LICENSE.txt')
 licenses=package/'licenses';licenses.mkdir(exist_ok=True)
+shutil.copy(ffmpeg/'COPYING.GPLv3',licenses/'FFmpeg-GPL-3.0.txt')
 shutil.copy(openh264/'LICENSE',licenses/'OpenH264.txt')
 for name in ('dav1d','jxl','brotli','highway','skcms','zlibng'):
     source=next((build/'src'/name).iterdir())
