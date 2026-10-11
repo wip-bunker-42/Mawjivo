@@ -24,7 +24,7 @@ export default {
         'Cache-Control',
         path.startsWith('/updates/') ? 'no-store' : 'public, max-age=31536000, immutable',
       );
-      const partial = request.method === 'GET' && object.range;
+      const partial = request.method === 'GET' && range !== null && object.range;
       headers.set('Content-Length', String(partial ? object.range.length : object.size));
       if (partial)
         headers.set(

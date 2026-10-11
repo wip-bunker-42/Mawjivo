@@ -2,6 +2,30 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import worker from '../download-worker.mjs';
 const origin = 'https://downloads.aimansour.com';
+test('a full download returns 200 even when R2 includes full-object range metadata', async () => {
+  for (const path of ['/updates/windows-x86_64-test.json', '/releases/0.1.1/Mawjivo.exe']) {
+    const response = await worker.fetch(new Request(origin + path), {
+      RELEASES: {
+        async get() {
+          return {
+            size: 4,
+            range: { offset: 0, length: 4 },
+            body: 'Mawj',
+            httpEtag: '"whole"',
+            writeHttpMetadata(h) {
+              h.set('Content-Type', 'application/octet-stream');
+            },
+          };
+        },
+      },
+    });
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get('Content-Range'), null);
+    assert.equal(response.headers.get('Content-Length'), '4');
+    assert.equal(await response.text(), 'Mawj');
+  }
+});
+
 test('a private repository test update is anonymously readable on its independent uncached channel', async () => {
   const manifest = {
     version: '0.1.1',
