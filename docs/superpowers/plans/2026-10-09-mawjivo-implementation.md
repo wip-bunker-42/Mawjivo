@@ -264,11 +264,11 @@
 
 **Interfaces:** `pnpm verify` يجمع الأنواع واختبارات TS وRust والبناء؛ `pnpm check:secrets -- paths...` يخرج 1 عند اكتشاف سر دون طباعته؛ `pnpm sync-version -- version` يحدث إصدارات التطبيق والخدمة وحزمة النشر وmanifest بصورة واحدة.
 
-- [ ] **1. فحص فاشل meaningful:** fixture سر اصطناعي في دليل مؤقت: `assert.equal(result.status, 1)` و`assert.ok(!result.stdout.includes(testSecret))`؛ نص عادي ينتظر status 0. `version_manifest_matches_all_consumers`: تغيير نسخة واحدة ينتظر status 1، وsync-version يعيد نسخًا مطابقة في Tauri/خدمة/حزمة. لا ينشأ اختبار يعيد قراءة YAML فقط.
-- [ ] **2. تشغيل الأحمر:** `node --test scripts/test/check-secrets.test.mjs scripts/test/version.test.mjs`؛ ينشئ الاختبار ملفات مؤقتة ويفحص exitCode/stdout للـCLI، وسبب الفشل detector/version المطلوب. ينظفها الاختبار في finally؛ لا تحفظ fixtures أسرار في المستودع أو أصول البناء.
-- [ ] **3. التنفيذ:** workflows بصلاحيات دنيا وActions مثبتة SHA بعد التحقق من مصادرها، وCI على PR/push، وWindows smoke build؛ Linux/macOS عند إصدار/طلب يدوي لتقليل ميزانية private Actions. Dependabot أسبوعي مجمع، وsecurity audit أسبوعي دون شراء خدمات. runtime secrets في environment/ملفات مؤقتة محمية وتمريرها stdin، ولا أسرار في arguments.
-- [ ] **4. تحقق:** تشغيل `pnpm verify` و`cargo fmt --check` و`cargo clippy -- -D warnings` ضمن المشروع الصحيح، ثم CI فعلي على GitHub. تأكيد أن artifacts لا تتضمن env/vault/key material، وإشعارات ومصدر FFmpeg وبصماته موجودة.
-- [ ] **5. تسجيل:** `git commit -m "ci: verify builds and maintain dependencies securely"`.
+- [x] **1. فحص فاشل meaningful:** fixture سر اصطناعي في دليل مؤقت: `assert.equal(result.status, 1)` و`assert.ok(!result.stdout.includes(testSecret))`؛ نص عادي ينتظر status 0. `version_manifest_matches_all_consumers`: تغيير نسخة واحدة ينتظر status 1، وsync-version يعيد نسخًا مطابقة في Tauri/خدمة/حزمة. لا ينشأ اختبار يعيد قراءة YAML فقط.
+- [x] **2. تشغيل الأحمر:** `node --test scripts/test/check-secrets.test.mjs scripts/test/version.test.mjs`؛ ينشئ الاختبار ملفات مؤقتة ويفحص exitCode/stdout للـCLI، وسبب الفشل detector/version المطلوب. ينظفها الاختبار في finally؛ لا تحفظ fixtures أسرار في المستودع أو أصول البناء.
+- [x] **3. التنفيذ:** workflows بصلاحيات دنيا وActions مثبتة SHA بعد التحقق من مصادرها، وCI على PR/push، وWindows smoke build؛ Linux/macOS عند إصدار/طلب يدوي لتقليل ميزانية private Actions. Dependabot أسبوعي مجمع، وsecurity audit أسبوعي دون شراء خدمات. runtime secrets في environment/ملفات مؤقتة محمية وتمريرها stdin، ولا أسرار في arguments.
+- [x] **4. تحقق:** تشغيل `pnpm verify` و`cargo fmt --check` و`cargo clippy -- -D warnings` ضمن المشروع الصحيح، ثم CI فعلي على GitHub. تأكيد أن artifacts لا تتضمن env/vault/key material، وإشعارات ومصدر FFmpeg وبصماته موجودة.
+- [x] **5. تسجيل:** `git commit -m "ci: verify builds and maintain dependencies securely"`.
 
 ### Task 15: مثبت Windows وتحديث موقّع وحفظ البيانات
 
