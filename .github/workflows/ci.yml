@@ -79,6 +79,7 @@ jobs:
         shell: pwsh
         run: cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml --locked --all-targets -- -D warnings
       - name: Native formatting
+        if: ${{ !cancelled() }}
         shell: pwsh
         run: |
           cargo fmt --manifest-path apps/desktop/src-tauri/Cargo.toml

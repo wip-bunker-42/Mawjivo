@@ -91,7 +91,7 @@ pub fn probe(tools: &MediaTools, path: &Path) -> Result<MediaInfo, AppError> {
     .contains(&brand)
     {
         Some("image/heic")
-    } else if format == "jxl_pipe" {
+    } else if format == "jpegxl_pipe" {
         Some("image/jxl")
     } else {
         None

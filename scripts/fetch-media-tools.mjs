@@ -1,10 +1,11 @@
 import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
-import { mkdir, readFile, copyFile, writeFile, access, mkdtemp, rm } from 'node:fs/promises';
+import { readFile, writeFile, access, mkdtemp, rm } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
+import { mediaArchiveFiles, installMediaArchive } from './media-installation.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const manifest = JSON.parse(await readFile(join(root, 'tools/media-tools.json'), 'utf8'));
@@ -20,10 +21,9 @@ async function hash(path) {
 }
 async function valid() {
   try {
-    for (const [name, digest] of Object.entries(config.files)) {
-      if ((await hash(join(destination, name))) !== digest) return false;
+    for (const file of mediaArchiveFiles(manifest, target)) {
+      if ((await hash(join(destination, file.destination))) !== file.sha256) return false;
     }
-    if ((await hash(join(destination, 'LICENSE.txt'))) !== manifest.licenseSha256) return false;
     await access(join(destination, 'SOURCE.json'));
     return true;
   } catch {
@@ -63,17 +63,7 @@ try {
   );
   if (result.status !== 0) throw new Error('Media tools extraction failed.');
   const extracted = join(unpack, config.archiveRoot);
-  if ((await hash(join(extracted, 'LICENSE.txt'))) !== manifest.licenseSha256)
-    throw new Error('Media tools license mismatch.');
-  // Verify every component before replacing any existing installation.
-  for (const [name, digest] of Object.entries(config.files)) {
-    if ((await hash(join(extracted, 'bin', name))) !== digest)
-      throw new Error(`Media tool component mismatch: ${name}`);
-  }
-  await mkdir(destination, { recursive: true });
-  for (const name of Object.keys(config.files))
-    await copyFile(join(extracted, 'bin', name), join(destination, name));
-  await copyFile(join(extracted, 'LICENSE.txt'), join(destination, 'LICENSE.txt'));
+  await installMediaArchive(extracted, destination, manifest, target);
   await writeFile(join(destination, 'SOURCE.json'), JSON.stringify(manifest, null, 2) + '\n');
   console.log(`Installed verified FFmpeg ${manifest.version} (${manifest.license}).`);
 } finally {

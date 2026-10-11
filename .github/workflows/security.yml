@@ -1,5 +1,10 @@
 name: Dependency security
 on:
+  push:
+    paths:
+      - '.github/workflows/security.yml'
+      - 'pnpm-lock.yaml'
+      - 'apps/desktop/src-tauri/Cargo.lock'
   schedule:
     - cron: '17 6 * * 1'
   workflow_dispatch:

@@ -8,7 +8,7 @@ use std::{
     },
     time::{Duration, Instant},
 };
-pub const FORMATS: &str = "mov,matroska,webm,avi,mpeg,mpegts,flv,asf,image2,image2pipe,png_pipe,jpeg_pipe,webp_pipe,bmp_pipe,tiff_pipe,gif,avif,heif,jxl_pipe";
+pub const FORMATS: &str = "mov,matroska,webm,avi,mpeg,mpegts,flv,asf,image2,image2pipe,png_pipe,jpeg_pipe,webp_pipe,bmp_pipe,tiff_pipe,gif,avif,heif,jpegxl_pipe";
 pub fn hidden(command: &mut Command) -> &mut Command {
     #[cfg(windows)]
     {
