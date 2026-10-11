@@ -77,10 +77,10 @@ impl FlushTicket {
 }
 impl Drop for FlushTicket {
     fn drop(&mut self) {
-        if let Ok(mut pending) = self.flush.0.pending.lock() {
-            if pending.as_ref().is_some_and(|ticket| ticket.id == self.id) {
-                *pending = None;
-            }
+        if let Ok(mut pending) = self.flush.0.pending.lock()
+            && pending.as_ref().is_some_and(|ticket| ticket.id == self.id)
+        {
+            *pending = None;
         }
     }
 }

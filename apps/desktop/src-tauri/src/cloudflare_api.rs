@@ -494,7 +494,9 @@ impl ProvisionApi for CloudflareClient {
             let version = result["bindings"]
                 .as_array()
                 .and_then(|bindings| {
-                    bindings.iter().find(|binding| binding["name"] == "SERVICE_VERSION")
+                    bindings
+                        .iter()
+                        .find(|binding| binding["name"] == "SERVICE_VERSION")
                 })
                 .and_then(|binding| binding["text"].as_str())
                 .unwrap_or("");
