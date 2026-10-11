@@ -353,10 +353,37 @@ fn mime_is_detected_from_bytes_and_existing_output_is_preserved() {
 }
 #[test]
 fn png_resizing_preserves_format_transparency_and_original_file() {
- let temp=tempfile::tempdir().unwrap();let source=temp.path().join("شفافة.PNG");let output=temp.path().join("شفافة-نسخة.PNG");
- image::RgbaImage::from_fn(64,32,|x,_|if x<32 {image::Rgba([0,0,0,0])}else{image::Rgba([10,70,150,255])}).save(&source).unwrap();
- let before=hash_file(&source).unwrap();let mut limits=recipe("image/png");limits.max_width=Some(32);limits.max_height=Some(16);
- let info=transform(&tools(),request(&source,&output,&limits,Arc::new(AtomicBool::new(false)),u64::MAX)).unwrap();
- assert_eq!(info.mime_type,"image/png");assert_eq!((info.width,info.height),(32,16));assert_eq!(before,hash_file(&source).unwrap());
- let actual=image::open(&output).unwrap().to_rgba8();assert_eq!(actual.get_pixel(0,0)[3],0);assert_eq!(actual.get_pixel(31,0)[3],255);
+    let temp = tempfile::tempdir().unwrap();
+    let source = temp.path().join("شفافة.PNG");
+    let output = temp.path().join("شفافة-نسخة.PNG");
+    image::RgbaImage::from_fn(64, 32, |x, _| {
+        if x < 32 {
+            image::Rgba([0, 0, 0, 0])
+        } else {
+            image::Rgba([10, 70, 150, 255])
+        }
+    })
+    .save(&source)
+    .unwrap();
+    let before = hash_file(&source).unwrap();
+    let mut limits = recipe("image/png");
+    limits.max_width = Some(32);
+    limits.max_height = Some(16);
+    let info = transform(
+        &tools(),
+        request(
+            &source,
+            &output,
+            &limits,
+            Arc::new(AtomicBool::new(false)),
+            u64::MAX,
+        ),
+    )
+    .unwrap();
+    assert_eq!(info.mime_type, "image/png");
+    assert_eq!((info.width, info.height), (32, 16));
+    assert_eq!(before, hash_file(&source).unwrap());
+    let actual = image::open(&output).unwrap().to_rgba8();
+    assert_eq!(actual.get_pixel(0, 0)[3], 0);
+    assert_eq!(actual.get_pixel(31, 0)[3], 255);
 }

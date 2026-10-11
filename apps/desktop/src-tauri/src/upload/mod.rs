@@ -108,10 +108,10 @@ impl UploadEngine {
         sources: &[String],
         registry: &crate::media::jobs::MediaRegistry,
     ) -> Result<Vec<UploadJob>, AppError> {
-        if sources.len() > 20 { return Err(AppError::new("MEDIA_COUNT", "يمكن استعادة حتى 20 ملفًا.")); }
-        let mut sessions = self.store.list(owner, profile, workspace)?;
-        sessions.retain(|session| session.phase != "cancelled" && sources.contains(&session.input.source_asset_id));
-        sessions.sort_by_key(|session| session.input.recipe_id.is_some());
+        if sources.len() > 20 {
+            return Err(AppError::new("MEDIA_COUNT", "يمكن استعادة حتى 20 ملفًا."));
+        }
+        let sessions = self.store.list_sources(owner, profile, workspace, sources)?;
         for session in &sessions {
             session.check_source()?;
             registry.restore(owner, &session.input, &session.path)?;
@@ -120,7 +120,9 @@ impl UploadEngine {
     }
     pub fn revalidate(&self, owner: &str, id: &str) -> Result<String, AppError> {
         let session = self.store.get(owner, id)?;
-        if session.phase == "cancelled" { return Err(cancelled()); }
+        if session.phase == "cancelled" {
+            return Err(cancelled());
+        }
         self.start(owner, session.input, &session.path)
     }
     pub fn new(store: Arc<UploadStore>) -> Self {

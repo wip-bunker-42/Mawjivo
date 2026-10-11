@@ -194,7 +194,13 @@ pub fn restore_uploads(
     source_asset_ids: Vec<String>,
 ) -> Result<Vec<UploadJob>, AppError> {
     native.store.get_state(&profile_id)?;
-    state.engine.restore_handles(window.label(), &profile_id, &workspace_id, &source_asset_ids, &media.registry)
+    state.engine.restore_handles(
+        window.label(),
+        &profile_id,
+        &workspace_id,
+        &source_asset_ids,
+        &media.registry,
+    )
 }
 pub fn setup(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let local = app.state::<NativeState>().store.clone();

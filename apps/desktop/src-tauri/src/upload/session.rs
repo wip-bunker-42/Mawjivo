@@ -154,4 +154,19 @@ impl UploadStore {
         .map(|row| serde_json::from_str(&row.map_err(local_error)?).map_err(local_error))
         .collect()
     }
+    pub fn list_sources(
+        &self,
+        owner: &str,
+        profile: &str,
+        workspace: &str,
+        sources: &[String],
+    ) -> Result<Vec<UploadSession>, AppError> {
+        let encoded = serde_json::to_string(sources).map_err(local_error)?;
+        let db = self.store.lock()?;
+        let mut q = db.prepare("SELECT body FROM upload_sessions WHERE owner=? AND profile_id=? AND workspace_id=? AND phase!='cancelled' AND json_extract(body,'$.input.sourceAssetId') IN (SELECT value FROM json_each(?)) ORDER BY (recipe_id!=''),rowid DESC LIMIT 200").map_err(local_error)?;
+        q.query_map(params![owner, profile, workspace, encoded], |r| r.get::<_, String>(0))
+            .map_err(local_error)?
+            .map(|row| serde_json::from_str(&row.map_err(local_error)?).map_err(local_error))
+            .collect()
+    }
 }

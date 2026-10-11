@@ -83,7 +83,9 @@ impl LocalStore {
             "SELECT d.body FROM composer_drafts c JOIN drafts d ON d.profile_id=c.profile_id AND d.workspace_id=c.workspace_id AND d.id=c.draft_id WHERE c.profile_id=? AND c.window_id=? AND c.workspace_id=?",
             params![profile, window, workspace], |row| row.get(0)
         ).optional().map_err(storage_error)?;
-        value.map(|body| serde_json::from_str(&body).map_err(storage_error)).transpose()
+        value
+            .map(|body| serde_json::from_str(&body).map_err(storage_error))
+            .transpose()
     }
     pub fn memory() -> Result<Self, AppError> {
         Self::initialize(Connection::open_in_memory().map_err(storage_error)?)

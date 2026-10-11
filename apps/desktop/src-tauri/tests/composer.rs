@@ -137,14 +137,39 @@ fn completed_upload_revalidation_clears_old_cloud_readiness_before_dispatch() {
 }
 #[test]
 fn an_old_draft_source_is_not_lost_after_two_hundred_newer_uploads() {
- let t=tempfile::tempdir().unwrap();let path=t.path().join("صورتي.JPEG");
- image::RgbImage::from_pixel(32,32,image::Rgb([10,20,30])).save(&path).unwrap();
- let local=Arc::new(LocalStore::memory().unwrap());let mut profile=ProvisionState::new("account");profile.profile.id="profile".into();local.save_state(&profile).unwrap();
- let sessions=Arc::new(UploadStore::new(local).unwrap());let engine=UploadEngine::new(sessions);
- let input:mawjivo_lib::contracts::UploadInput=serde_json::from_value(serde_json::json!({"profileId":"profile","workspaceId":"space","fileId":"old-source","sourceAssetId":"old-source","recipeId":null,"manifest":{"sourceAssetId":"old-source","recipeId":null,"originalName":"صورتي.JPEG","kind":"image","bytes":std::fs::metadata(&path).unwrap().len(),"mimeType":"image/jpeg","width":32,"height":32}})).unwrap();
- engine.start("main",input.clone(),&path).unwrap();
- for index in 0..201 {let mut next=input.clone();next.file_id=format!("source-{index}");next.source_asset_id=next.file_id.clone();next.manifest.source_asset_id=next.file_id.clone();engine.start("main",next,&path).unwrap();}
- let registry=MediaRegistry::default();
- assert_eq!(engine.restore_handles("main","profile","space",&["old-source".into()],&registry).unwrap().len(),1);
- assert!(registry.file_for("main","old-source").is_ok());
+    let t = tempfile::tempdir().unwrap();
+    let path = t.path().join("صورتي.JPEG");
+    image::RgbImage::from_pixel(32, 32, image::Rgb([10, 20, 30]))
+        .save(&path)
+        .unwrap();
+    let local = Arc::new(LocalStore::memory().unwrap());
+    let mut profile = ProvisionState::new("account");
+    profile.profile.id = "profile".into();
+    local.save_state(&profile).unwrap();
+    let sessions = Arc::new(UploadStore::new(local).unwrap());
+    let engine = UploadEngine::new(sessions);
+    let input:mawjivo_lib::contracts::UploadInput=serde_json::from_value(serde_json::json!({"profileId":"profile","workspaceId":"space","fileId":"old-source","sourceAssetId":"old-source","recipeId":null,"manifest":{"sourceAssetId":"old-source","recipeId":null,"originalName":"صورتي.JPEG","kind":"image","bytes":std::fs::metadata(&path).unwrap().len(),"mimeType":"image/jpeg","width":32,"height":32}})).unwrap();
+    engine.start("main", input.clone(), &path).unwrap();
+    for index in 0..201 {
+        let mut next = input.clone();
+        next.file_id = format!("source-{index}");
+        next.source_asset_id = next.file_id.clone();
+        next.manifest.source_asset_id = next.file_id.clone();
+        engine.start("main", next, &path).unwrap();
+    }
+    let registry = MediaRegistry::default();
+    assert_eq!(
+        engine
+            .restore_handles(
+                "main",
+                "profile",
+                "space",
+                &["old-source".into()],
+                &registry
+            )
+            .unwrap()
+            .len(),
+        1
+    );
+    assert!(registry.file_for("main", "old-source").is_ok());
 }

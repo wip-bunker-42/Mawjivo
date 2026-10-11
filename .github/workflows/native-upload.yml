@@ -65,7 +65,7 @@ jobs:
         run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --locked --test upload_binding -- --nocapture
       - name: Full native suite
         shell: pwsh
-        run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --locked
+        run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --locked --no-fail-fast
       - name: Native lint
         id: native-lint
         shell: pwsh

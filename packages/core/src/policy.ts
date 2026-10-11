@@ -79,7 +79,9 @@ function makeRecipe(asset: MediaAsset, limits: MediaLimits): MediaRecipe | null 
     asset.bytes <= limits.maxBytes
   )
     return null;
-  const outputMimeType = mimeMatches
+  const outputMimeType = asset.kind === 'video' && limits.mimeTypes.includes('video/mp4')
+    ? 'video/mp4'
+    : mimeMatches
     ? asset.mimeType
     : limits.mimeTypes.includes(asset.kind === 'image' ? 'image/jpeg' : 'video/mp4')
       ? asset.kind === 'image'
