@@ -72,6 +72,10 @@ fn storage_error(_: impl std::fmt::Debug) -> AppError {
         "تعذر حفظ البيانات المحلية. تحقق من مساحة القرص وصلاحيات مجلد التطبيق.",
     )
 }
+pub fn migrate_local_database(db: &mut Connection, _backup: &Path, version: u32, sql: &str) -> Result<(), AppError> {
+    db.execute_batch(sql).map_err(|_| AppError::new("LOCAL_MIGRATION_FAILED", "تعذر ترقية البيانات المحلية. احتُفظ بمسوداتك."))?;
+    db.pragma_update(None, "user_version", version).map_err(storage_error)
+}
 impl LocalStore {
     pub fn window_draft(
         &self,
@@ -96,6 +100,10 @@ impl LocalStore {
     fn initialize(db: Connection) -> Result<Self, AppError> {
         db.busy_timeout(std::time::Duration::from_secs(5))
             .map_err(storage_error)?;
+        let version: u32 = db.query_row("PRAGMA user_version", [], |row| row.get(0)).map_err(storage_error)?;
+        if version > 2 {
+            return Err(AppError::new("LOCAL_SCHEMA_NEWER", "البيانات المحلية تخص إصدارًا أحدث. ثبّت الإصدار الأحدث للحفاظ على مسوداتك."));
+        }
         db.execute_batch("PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL;
             CREATE TABLE IF NOT EXISTS profiles(id TEXT PRIMARY KEY,state_json TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS drafts(profile_id TEXT NOT NULL,workspace_id TEXT NOT NULL,id TEXT NOT NULL,revision INTEGER NOT NULL,body TEXT NOT NULL,PRIMARY KEY(profile_id,workspace_id,id),FOREIGN KEY(profile_id) REFERENCES profiles(id));

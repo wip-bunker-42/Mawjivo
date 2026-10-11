@@ -69,6 +69,30 @@ import type {
   Workspace,
 } from '@mawjivo/core';
 import { listen } from '@tauri-apps/api/event';
+import { getCurrentWindow } from '@tauri-apps/api/window';
+export interface UpdateInfo {
+  id: string;
+  version: string;
+  notesAr: string;
+  bytes: number;
+}
+export interface UpdateProgress {
+  updateId: string;
+  completedBytes: number;
+  totalBytes: number | null;
+  phase: 'downloading' | 'verified';
+}
+export const checkUpdate = () => native<UpdateInfo | null>('check_update');
+export const downloadUpdate = (updateId: string) => native<void>('download_update', { updateId });
+export const installUpdate = (updateId: string) => native<void>('install_update', { updateId });
+export function onUpdateProgress(
+  callback: (progress: UpdateProgress) => void,
+): Promise<() => void> {
+  if (!isTauri()) return Promise.resolve(() => {});
+  return listen<UpdateProgress>('update-progress', (event) => callback(event.payload), {
+    target: { kind: 'Window', label: getCurrentWindow().label },
+  });
+}
 export interface SelectedFile {
   fileId: string;
   originalName: string;

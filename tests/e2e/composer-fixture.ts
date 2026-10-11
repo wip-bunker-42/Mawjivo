@@ -13,6 +13,7 @@ export async function composerFixture(
     revisionConflict?: boolean;
     repairedRejection?: boolean;
     olderNativeDraft?: boolean;
+    update?: 'available' | 'signature-invalid' | 'busy' | 'none';
   } = {},
 ): Promise<void> {
   await page.addInitScript((options) => {
@@ -235,6 +236,39 @@ export async function composerFixture(
         unregisterCallback: (id: number) => callbacks.delete(id),
         invoke: async (command: string, args?: Record<string, unknown>) => {
           calls.push({ command, args });
+          if (command === 'check_update')
+            return options.update === 'none'
+              ? null
+              : {
+                  id: 'synthetic-update',
+                  version: '0.1.1',
+                  notesAr: 'تحسين حفظ المسودات.',
+                  bytes: 4096,
+                };
+          if (command === 'download_update') {
+            if (options.update === 'signature-invalid')
+              throw {
+                code: 'UPDATE_SIGNATURE_INVALID',
+                messageAr: 'توقيع التحديث غير صالح. أعد الفحص.',
+                retryable: false,
+              };
+            emit('update-progress', {
+              updateId: 'synthetic-update',
+              completedBytes: 4096,
+              totalBytes: 4096,
+              phase: 'verified',
+            });
+            return null;
+          }
+          if (command === 'install_update') {
+            if (options.update === 'busy')
+              throw {
+                code: 'UPDATE_BUSY',
+                messageAr: 'انتظر انتهاء الرفع أو معالجة الوسائط، ثم أعد التثبيت.',
+                retryable: false,
+              };
+            return null;
+          }
           if (command === 'configure_monitoring')
             return [
               {

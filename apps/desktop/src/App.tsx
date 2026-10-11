@@ -4,6 +4,7 @@ import { SetupPage } from './features/setup/SetupPage';
 import { ConnectionsPage } from './features/settings/ConnectionsPage';
 import { WorkspaceSettings } from './features/settings/WorkspaceSettings';
 import { TelegramPage } from './features/settings/TelegramPage';
+import { UpdatesPage } from './features/settings/UpdatesPage';
 import { ComposerPage } from './features/composer/ComposerPage';
 import { ScheduledPage } from './features/history/ScheduledPage';
 import { SummaryPage } from './features/history/SummaryPage';
@@ -27,7 +28,7 @@ export function App(): ReactElement {
     [workspaces, setWorkspaces] = useState<Workspace[]>([]),
     [workspaceId, setWorkspaceId] = useState('');
   const [settingsPage, setSettingsPage] = useState<
-      'cloudflare' | 'workspaces' | 'connections' | 'telegram'
+      'cloudflare' | 'workspaces' | 'connections' | 'telegram' | 'updates'
     >('cloudflare'),
     [message, setMessage] = useState('');
   const workspace = workspaces.find((item) => item.id === workspaceId) ?? null;
@@ -120,6 +121,7 @@ export function App(): ReactElement {
                   { id: 'workspaces', label: 'مساحات العمل' },
                   { id: 'connections', label: 'حسابات النشر' },
                   { id: 'telegram', label: 'تليجرام والمراقبة' },
+                  { id: 'updates', label: 'التحديثات' },
                 ] as const
               ).map((item) => (
                 <button
@@ -146,6 +148,8 @@ export function App(): ReactElement {
                 workspace={workspace}
                 onSaved={savedWorkspace}
               />
+            ) : settingsPage === 'updates' ? (
+              <UpdatesPage />
             ) : settingsPage === 'telegram' ? (
               <TelegramPage key={workspace?.id ?? 'new'} workspace={workspace} />
             ) : (

@@ -7,6 +7,7 @@ pub mod media;
 pub mod profiles;
 pub mod service_artifact;
 pub mod upload;
+pub mod updates;
 pub mod vault;
 pub mod windows;
 pub fn run() {

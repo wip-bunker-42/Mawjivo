@@ -666,5 +666,5 @@ pub fn worker_upload_metadata(
     state: &ProvisionState,
     bindings: Vec<Value>,
 ) -> Value {
-    json!({"main_module":artifact.main_module,"compatibility_date":artifact.compatibility_date,"compatibility_flags":artifact.compatibility_flags,"bindings":bindings,"tags":[state.owner_tag()],"observability":{"enabled":true,"head_sampling_rate":0.1}})
+    json!({"main_module":artifact.main_module,"compatibility_date":artifact.compatibility_date,"compatibility_flags":artifact.compatibility_flags,"bindings":bindings,"keep_bindings":["secret_text"],"tags":[state.owner_tag()],"observability":{"enabled":true,"head_sampling_rate":0.1}})
 }
