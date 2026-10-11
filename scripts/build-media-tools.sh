@@ -45,7 +45,7 @@ fi
 export PKG_CONFIG_PATH="$task_prefix/lib/pkgconfig"
 export PKG_CONFIG_LIBDIR="$task_prefix/lib/pkgconfig"
 cmake -S "$task_zlibng" -B "$task_build/zlibng-build" -G Ninja \
-  -DCMAKE_SYSTEM_NAME=Windows -DCMAKE_C_COMPILER=x86_64-w64-mingw32-clang \
+  -DCMAKE_SYSTEM_NAME=Windows -DCMAKE_SYSTEM_PROCESSOR=x86_64 -DCMAKE_C_COMPILER=x86_64-w64-mingw32-clang \
   -DCMAKE_CXX_COMPILER=x86_64-w64-mingw32-clang++ -DCMAKE_RC_COMPILER=x86_64-w64-mingw32-windres \
   -DCMAKE_AR=llvm-ar -DCMAKE_RANLIB=llvm-ranlib -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_INSTALL_PREFIX="$task_prefix" -DCMAKE_INSTALL_LIBDIR=lib \

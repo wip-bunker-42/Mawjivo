@@ -79,12 +79,14 @@ const setup = spawnSync(
 if (setup.status !== 0) throw new Error('Owned downloads infrastructure is not ready.');
 await publishDownloads(objects, {
   inspect: async (object) => {
+    console.log('Checking versioned download: ' + object.name + '.');
     const response = await fetch(origin + object.key, { signal: AbortSignal.timeout(300_000) });
     if (response.status === 404) return null;
     if (!response.ok) throw new Error('Existing public download could not be verified.');
     return { sha256: await hash(response.body) };
   },
   upload: async (object) => {
+    console.log('Uploading verified archive: ' + object.name + ' (' + object.bytes + ' bytes).');
     const result = spawnSync(
       process.execPath,
       [
