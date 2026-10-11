@@ -251,6 +251,35 @@ try {
     { encoding: 'utf8', windowsHide: true, timeout: 15000 },
   );
   await writeFile(join(output, 'native-diagnostics.json'), diagnostics.stdout || '{}');
+  if (directDriver && !session) {
+    const standalone = spawn(app, [], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      windowsHide: true,
+      env: { ...process.env, RUST_BACKTRACE: '1' },
+    });
+    let startup = '';
+    for (const stream of [standalone.stdout, standalone.stderr])
+      stream.on('data', (chunk) => {
+        startup = (startup + chunk).slice(-24000);
+      });
+    standalone.on('error', (error) => {
+      startup += '\nSpawn: ' + error.message;
+    });
+    await delay(5000);
+    await writeFile(
+      join(output, 'standalone-startup.json'),
+      JSON.stringify(
+        {
+          exitCode: standalone.exitCode,
+          signal: standalone.signalCode,
+          output: startup,
+        },
+        null,
+        2,
+      ) + '\n',
+    );
+    standalone.kill();
+  }
   throw error;
 } finally {
   if (session) await request(`/session/${session}`, 'DELETE').catch(() => {});

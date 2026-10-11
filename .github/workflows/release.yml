@@ -190,6 +190,7 @@ jobs:
             .tools/installed-acceptance/failure.*
             .tools/installed-acceptance/native-diagnostics.json
             .tools/installed-acceptance/edge.log
+            .tools/installed-acceptance/standalone-startup.json
             apps/desktop/src-tauri/target/release/verify_update.exe
             apps/desktop/src-tauri/target/release/acceptance_data.exe
             apps/desktop/src-tauri/target/release/setup.exe
