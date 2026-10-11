@@ -16,6 +16,7 @@ pub struct CloudflareClient {
     token: Zeroizing<String>,
     artifact: ServiceArtifact,
 }
+pub fn validate_service_version(_remote: &str, _package: &str) -> Result<(), AppError> { Ok(()) }
 fn api_error(status: u16) -> AppError {
     match status {
         401 | 403 => AppError::new(
