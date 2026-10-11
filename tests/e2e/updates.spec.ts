@@ -1,6 +1,19 @@
 import { test, expect } from '@playwright/test';
 import { composerFixture } from './composer-fixture';
 
+test('service selection becomes available when profiles arrive after opening settings', async ({
+  page,
+}) => {
+  await composerFixture(page, { profileDelayMs: 1500 });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'الإعدادات', exact: true }).click();
+  await page.getByRole('button', { name: 'التحديثات', exact: true }).click();
+  await expect(page.getByLabel('خدمة Cloudflare المراد تحديثها')).toHaveValue('profile-1');
+  await expect(
+    page.getByRole('button', { name: 'تحديث خدمة Cloudflare', exact: true }),
+  ).toHaveAttribute('aria-disabled', 'false');
+});
+
 test('a window acknowledges update preparation only after its queued draft is saved', async ({
   page,
 }) => {

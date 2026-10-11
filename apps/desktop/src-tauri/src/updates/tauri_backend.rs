@@ -5,6 +5,7 @@ use crate::contracts::{AppError, UpdateInfo};
 use async_trait::async_trait;
 use serde::Serialize;
 use std::sync::Arc;
+use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager, State, Window};
 use tauri_plugin_updater::{Update, UpdaterExt};
 
@@ -185,19 +186,37 @@ pub async fn install_update(
     flush: State<'_, super::DraftFlush>,
     update_id: String,
 ) -> Result<(), AppError> {
-    let result = state.install_after_prepare(window.label(), &update_id, async {
-        let windows = app.webview_windows();
-        let ticket = flush.begin(windows.keys().cloned().collect())?;
-        for target in windows.values() {
-            target.emit("update-flush", serde_json::json!({"ticketId":ticket.id})).map_err(|_| super::state_error())?;
-        }
-        tokio::time::timeout(Duration::from_secs(10), ticket.wait()).await.map_err(|_| AppError::new("UPDATE_DRAFT_SAVE", "لم يكتمل حفظ النوافذ. راجعها ثم أعد التثبيت."))?
-    }).await;
-    for target in app.webview_windows().values() { let _ = target.emit("update-flush-release", ()); }
+    let result = state
+        .install_after_prepare(window.label(), &update_id, async {
+            let windows = app.webview_windows();
+            let ticket = flush.begin(windows.keys().cloned().collect())?;
+            for target in windows.values() {
+                target
+                    .emit("update-flush", serde_json::json!({"ticketId":ticket.id}))
+                    .map_err(|_| super::state_error())?;
+            }
+            tokio::time::timeout(Duration::from_secs(10), ticket.wait())
+                .await
+                .map_err(|_| {
+                    AppError::new(
+                        "UPDATE_DRAFT_SAVE",
+                        "لم يكتمل حفظ النوافذ. راجعها ثم أعد التثبيت.",
+                    )
+                })?
+        })
+        .await;
+    for target in app.webview_windows().values() {
+        let _ = target.emit("update-flush-release", ());
+    }
     result
 }
 #[tauri::command]
-pub fn acknowledge_update_flush(window: Window, flush: State<'_, super::DraftFlush>, ticket_id: String, saved: bool) -> Result<(), AppError> {
+pub fn acknowledge_update_flush(
+    window: Window,
+    flush: State<'_, super::DraftFlush>,
+    ticket_id: String,
+    saved: bool,
+) -> Result<(), AppError> {
     flush.acknowledge(window.label(), &ticket_id, saved)
 }
 pub fn setup(app: &tauri::App) {

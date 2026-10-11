@@ -34,7 +34,9 @@ struct FakeApi {
 }
 #[async_trait]
 impl ProvisionApi for FakeApi {
-    async fn verify_existing_resources(&self, _: &ProvisionState) -> Result<(), AppError> { Ok(()) }
+    async fn verify_existing_resources(&self, _: &ProvisionState) -> Result<(), AppError> {
+        Ok(())
+    }
     async fn worker_tags(&self, _: &str) -> Result<Option<Vec<String>>, AppError> {
         Ok(self.tags.lock().unwrap().clone())
     }

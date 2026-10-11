@@ -1,20 +1,31 @@
-name: Build Windows release
+name: Windows signed update acceptance
 on:
   workflow_dispatch:
 permissions:
   contents: read
+  actions: read
+concurrency:
+  group: mawjivo-release-publication
+  cancel-in-progress: false
 jobs:
-  bundle:
+  acceptance:
     runs-on: windows-2025
-    timeout-minutes: 45
+    timeout-minutes: 75
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Require successful verification of this commit
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $taskRuns = gh run list --workflow ci.yml --commit $env:GITHUB_SHA --limit 1 --json conclusion | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0 -or $taskRuns.Count -ne 1 -or $taskRuns[0].conclusion -ne 'success') { throw 'Exact commit verification must pass before signing.' }
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .node-version
-      - name: Prepare pinned release inputs
+      - name: Install pinned tools
         shell: pwsh
         run: |
           $taskPnpm = (Get-Content package.json -Raw | ConvertFrom-Json).packageManager
@@ -23,24 +34,96 @@ jobs:
           pnpm.cmd install --frozen-lockfile
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           rustup toolchain install 1.99.0 --profile minimal
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          exit $LASTEXITCODE
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            apps/desktop/src-tauri/target
+            .tools/tauri-driver
+          key: mawjivo-windows-release-1.99-${{ hashFiles('apps/desktop/src-tauri/Cargo.lock') }}
+          restore-keys: |
+            mawjivo-windows-release-1.99-
+            mawjivo-windows-rust-1.99-
+      - name: Prepare verified resources and real notices
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
           cargo fetch --manifest-path apps/desktop/src-tauri/Cargo.toml --locked
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           pnpm.cmd media:tools
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           pnpm.cmd notices
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (!(Test-Path .tools/tauri-driver/bin/tauri-driver.exe)) {
+            cargo install tauri-driver --version 2.1.0 --locked --root .tools/tauri-driver
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+      - name: Build signed clean-install candidate
+        shell: pwsh
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.MAWJIVO_TEST_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ''
+        run: |
+          if (!$env:TAURI_SIGNING_PRIVATE_KEY) { throw 'Acceptance signing secret missing.' }
+          pnpm.cmd --dir apps/desktop exec tauri build --config ../../tools/acceptance-tauri.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Set-Content .tools/acceptance-notes.txt 'اختبار حفظ المساحات والمسودات أثناء التحديث.' -Encoding utf8NoBOM
+          node scripts/package-windows-release.mjs apps/desktop/src-tauri/target/release/bundle/nsis .tools/acceptance-base 0.1.0 $env:GITHUB_SHA test .tools/acceptance-notes.txt
           exit $LASTEXITCODE
-      - name: Build installer
+      - name: Build signed next-version candidate and independent verifier
+        shell: pwsh
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.MAWJIVO_TEST_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ''
+        run: |
+          node scripts/sync-version.mjs 0.1.1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Get-ChildItem -LiteralPath apps/desktop/src-tauri/target/release/bundle/nsis -File | Remove-Item
+          pnpm.cmd --dir apps/desktop exec tauri build --config ../../tools/acceptance-tauri.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo build --manifest-path apps/desktop/src-tauri/Cargo.toml --locked --release --bin verify_update --bin acceptance_data
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/package-windows-release.mjs apps/desktop/src-tauri/target/release/bundle/nsis .tools/acceptance-next 0.1.1 $env:GITHUB_SHA test .tools/acceptance-notes.txt
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/verify-release.mjs .tools/acceptance-base test
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/verify-release.mjs .tools/acceptance-next test
+          exit $LASTEXITCODE
+      - name: Publish only the verified test-channel installer
+        shell: pwsh
+        env:
+          MAWJIVO_RELEASE_ACCOUNT_ID: ${{ vars.MAWJIVO_RELEASE_ACCOUNT_ID }}
+          MAWJIVO_RELEASE_ACCESS_KEY_ID: ${{ secrets.MAWJIVO_RELEASE_ACCESS_KEY_ID }}
+          MAWJIVO_RELEASE_SECRET_KEY: ${{ secrets.MAWJIVO_RELEASE_SECRET_KEY }}
+        run: node scripts/publish-release.mjs .tools/acceptance-next test
+      - name: Install matching Edge WebDriver
         shell: pwsh
         run: |
-          pnpm.cmd tauri:build
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          node scripts/check-secrets.mjs .tools/legal apps/desktop/src-tauri/service-artifact apps/desktop/dist
-      - name: Retain installer for verification
+          $taskEdge = Join-Path ${env:ProgramFiles(x86)} 'Microsoft/Edge/Application/msedge.exe'
+          $taskVersion = (Get-Item -LiteralPath $taskEdge).VersionInfo.ProductVersion
+          if ($taskVersion -notmatch '^\d+\.\d+\.\d+\.\d+$') { throw 'Edge version unavailable.' }
+          New-Item -ItemType Directory -Force .tools/edge-driver | Out-Null
+          Invoke-WebRequest -Uri "https://msedgedriver.microsoft.com/$taskVersion/edgedriver_win64.zip" -OutFile .tools/edge-driver.zip
+          Expand-Archive -LiteralPath .tools/edge-driver.zip -DestinationPath .tools/edge-driver -Force
+          $taskDriverVersion = & .tools/edge-driver/msedgedriver.exe --version
+          if ($taskDriverVersion -notmatch [regex]::Escape($taskVersion)) { throw 'Edge driver mismatch.' }
+      - name: Prove actual install and signed in-app update with Windows vault
+        shell: pwsh
+        env:
+          MAWJIVO_ACCEPTANCE_FIXTURE_URL: ${{ vars.MAWJIVO_ACCEPTANCE_FIXTURE_URL }}
+        run: node scripts/accept-installed-update.mjs .tools/acceptance-base .tools/acceptance-next .tools/tauri-driver/bin/tauri-driver.exe .tools/edge-driver/msedgedriver.exe .tools/installed-acceptance
+      - name: Retain concrete acceptance evidence and installers
+        if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: windows-release
+          name: windows-signed-acceptance
           path: |
-            apps/desktop/src-tauri/target/release/bundle/nsis/*
-            .tools/legal/*
+            .tools/acceptance-base/
+            .tools/acceptance-next/
+            .tools/installed-acceptance/acceptance-proof.json
+            .tools/installed-acceptance/driver.log
+            apps/desktop/src-tauri/target/release/verify_update.exe
+            apps/desktop/src-tauri/target/release/acceptance_data.exe
           retention-days: 7

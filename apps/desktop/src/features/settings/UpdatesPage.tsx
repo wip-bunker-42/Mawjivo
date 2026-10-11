@@ -26,7 +26,10 @@ export function UpdatesPage({
   const [progress, setProgress] = useState<UpdateProgress | null>(null);
   const busy = useRef(false);
   const [packageInfo, setPackageInfo] = useState<ServicePackageInfo | null>(null);
-  const [selectedProfile, setSelectedProfile] = useState(profiles[0]?.id ?? '');
+  const [requestedProfile, setSelectedProfile] = useState(profiles[0]?.id ?? '');
+  const selectedProfile = profiles.some((profile) => profile.id === requestedProfile)
+    ? requestedProfile
+    : (profiles[0]?.id ?? '');
   const [serviceMessage, setServiceMessage] = useState('');
   const [upgrading, setUpgrading] = useState(false);
   useEffect(() => {

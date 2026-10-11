@@ -16,6 +16,7 @@ export async function composerFixture(
     update?: 'available' | 'signature-invalid' | 'busy' | 'none';
     deferredSave?: boolean;
     saveFailure?: boolean;
+    profileDelayMs?: number;
   } = {},
 ): Promise<void> {
   await page.addInitScript((options) => {
@@ -301,7 +302,9 @@ export async function composerFixture(
             return id;
           }
           if (command === 'plugin:event|unlisten') return null;
-          if (command === 'list_profiles')
+          if (command === 'list_profiles') {
+            if (options.profileDelayMs)
+              await new Promise((resolve) => setTimeout(resolve, options.profileDelayMs));
             return [
               {
                 id: 'profile-1',
@@ -312,6 +315,7 @@ export async function composerFixture(
                 version: '0.1.0',
               },
             ];
+          }
           if (command === 'composer_context')
             return { windowId, draft: drafts.get(String(args!.workspaceId)) ?? null };
           if (command === 'save_draft') {

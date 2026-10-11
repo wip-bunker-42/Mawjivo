@@ -43,16 +43,29 @@ pub async fn provision_service(
     provision_with(&api, &SystemVault, &state.store, selected, input).await
 }
 #[tauri::command]
-pub fn service_package_info() -> Result<crate::cloudflare::ServicePackageInfo, AppError> { crate::cloudflare::service_package_info() }
+pub fn service_package_info() -> Result<crate::cloudflare::ServicePackageInfo, AppError> {
+    crate::cloudflare::service_package_info()
+}
 #[tauri::command]
-pub async fn upgrade_service(state: State<'_, NativeState>, gate: State<'_, crate::updates::OperationGate>, profile_id: String, package_id: String) -> Result<ServiceProfile, AppError> {
+pub async fn upgrade_service(
+    state: State<'_, NativeState>,
+    gate: State<'_, crate::updates::OperationGate>,
+    profile_id: String,
+    package_id: String,
+) -> Result<ServiceProfile, AppError> {
     let _work = gate.work()?;
     let _guard = state.setup_lock.lock().await;
-    if package_id != crate::cloudflare::service_package_info()?.id { return Err(AppError::new("SERVICE_PACKAGE_INVALID", "حزمة الخدمة غير صالحة.")); }
+    if package_id != crate::cloudflare::service_package_info()?.id {
+        return Err(AppError::new(
+            "SERVICE_PACKAGE_INVALID",
+            "حزمة الخدمة غير صالحة.",
+        ));
+    }
     let selected = state.store.get_state(&profile_id)?;
     let input = crate::cloudflare::stored_input(&selected, &SystemVault)?;
     let api = CloudflareClient::new(&input, &selected).await?;
-    crate::cloudflare::upgrade_with(&api, &SystemVault, &state.store, &profile_id, &package_id).await
+    crate::cloudflare::upgrade_with(&api, &SystemVault, &state.store, &profile_id, &package_id)
+        .await
 }
 #[tauri::command]
 pub fn save_draft(

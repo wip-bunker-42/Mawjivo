@@ -419,9 +419,23 @@ impl ProvisionApi for CloudflareClient {
     async fn verify_existing_resources(&self, state: &ProvisionState) -> Result<(), AppError> {
         let database = state.database_id.as_deref().ok_or_else(invalid_response)?;
         self.assert_database_owner(database).await?;
-        let marker = self.send(Method::GET, &self.account_path(&format!("/r2/buckets/{}-media/objects/mawjivo%2Fowner-service-id", state.worker_name())), None).await?;
-        if !marker.status().is_success() || bounded_body(marker, 1024).await? != self.service_id.as_bytes() {
-            return Err(AppError::new("RESOURCE_NOT_OWNED", "حاوية الوسائط غير موجودة أو لا تحمل علامة الملكية. لم تُعدل."));
+        let marker = self
+            .send(
+                Method::GET,
+                &self.account_path(&format!(
+                    "/r2/buckets/{}-media/objects/mawjivo%2Fowner-service-id",
+                    state.worker_name()
+                )),
+                None,
+            )
+            .await?;
+        if !marker.status().is_success()
+            || bounded_body(marker, 1024).await? != self.service_id.as_bytes()
+        {
+            return Err(AppError::new(
+                "RESOURCE_NOT_OWNED",
+                "حاوية الوسائط غير موجودة أو لا تحمل علامة الملكية. لم تُعدل.",
+            ));
         }
         Ok(())
     }

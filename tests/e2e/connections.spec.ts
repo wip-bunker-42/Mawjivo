@@ -59,7 +59,10 @@ test('workspace_defaults_and_provider_choice_survive_save_and_workspace_switch',
     Object.assign(globalThis, {
       isTauri: true,
       __TAURI_INTERNALS__: {
+        metadata: { currentWindow: { label: 'main' }, currentWebview: { label: 'main' } },
+        transformCallback: () => 1,
         invoke: async (command: string, args?: Record<string, unknown>) => {
+          if (command === 'plugin:event|listen' || command === 'plugin:event|unlisten') return 1;
           if (command === 'list_profiles') return profiles;
           if (command !== 'service_request') throw new Error('Unexpected synthetic command');
           const path = String(args!.path);
@@ -122,7 +125,10 @@ test('new_workspace_uses_its_selected_cloudflare_profile', async ({ page }) => {
     Object.assign(globalThis, {
       isTauri: true,
       __TAURI_INTERNALS__: {
+        metadata: { currentWindow: { label: 'main' }, currentWebview: { label: 'main' } },
+        transformCallback: () => 1,
         invoke: async (command: string, args?: Record<string, unknown>) => {
+          if (command === 'plugin:event|listen' || command === 'plugin:event|unlisten') return 1;
           if (command === 'list_profiles')
             return ['profile-1', 'profile-2'].map((id) => ({
               id,

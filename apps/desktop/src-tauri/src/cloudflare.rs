@@ -43,12 +43,18 @@ pub async fn upgrade_with(
 ) -> Result<ServiceProfile, AppError> {
     let package = service_package_info()?;
     if package_id != package.id {
-        return Err(AppError::new("SERVICE_PACKAGE_INVALID", "حزمة الخدمة غير صالحة. افتح التحديث من التطبيق."));
+        return Err(AppError::new(
+            "SERVICE_PACKAGE_INVALID",
+            "حزمة الخدمة غير صالحة. افتح التحديث من التطبيق.",
+        ));
     }
     let mut state = store.get_state(profile_id)?;
     let tags = api.worker_tags(&state.worker_name()).await?;
     if !tags.is_some_and(|tags| tags.contains(&state.owner_tag())) {
-        return Err(AppError::new("RESOURCE_NOT_OWNED", "الخدمة غير موجودة أو لا تحمل علامة الملكية. أعد فحص الإعداد."));
+        return Err(AppError::new(
+            "RESOURCE_NOT_OWNED",
+            "الخدمة غير موجودة أو لا تحمل علامة الملكية. أعد فحص الإعداد.",
+        ));
     }
     let input = stored_input(&state, vault)?;
     validate_input(&input)?;
