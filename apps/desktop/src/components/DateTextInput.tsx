@@ -11,9 +11,11 @@ function display(value: string): string {
   return match ? `${match[3]}/${match[2]}/${match[1]}${match[4] ? ' ' + match[4] : ''}` : value;
 }
 function iso(value: string, withTime: boolean): string {
-  const text = digits(value.trim());
+  const text = digits(value);
   const match =
-    /^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2})(\.\d{1,3})?)?)?$/.exec(text);
+    /^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2})(\.\d{1,3})?)?)?$/.exec(
+      text.trim(),
+    );
   if (!match || Boolean(match[4]) !== withTime) return text;
   const date = `${match[3]}-${match[2]!.padStart(2, '0')}-${match[1]!.padStart(2, '0')}`;
   const result = withTime

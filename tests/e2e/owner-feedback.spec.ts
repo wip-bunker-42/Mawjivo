@@ -1,6 +1,22 @@
 import { test, expect } from '@playwright/test';
 import { composerFixture } from './composer-fixture';
 
+test('schedule_accepts_a_date_and_time_typed_character_by_character', async ({ page }) => {
+  await page.clock.setFixedTime(new Date('2026-10-12T09:00:00Z'));
+  await composerFixture(page);
+  await page.goto('/');
+  await page.getByLabel('النص أو الوصف', { exact: true }).fill('توقيت مكتوب');
+  await page.getByRole('checkbox', { name: 'Instagram', exact: true }).uncheck();
+  await page.getByRole('checkbox', { name: 'YouTube', exact: true }).uncheck();
+  await page.getByRole('checkbox', { name: 'جدولة النشر' }).check();
+  const input = page.getByRole('textbox', { name: 'وقت النشر', exact: true });
+  await input.fill('');
+  await input.pressSequentially('12/10/2026 20:30');
+  await expect(input).toHaveValue('12/10/2026 20:30');
+  await page.getByRole('button', { name: 'مراجعة النشر' }).click();
+  await expect(page.getByRole('dialog')).toBeVisible();
+});
+
 test('restoring_an_accepted_draft_opens_a_fresh_enabled_composer_without_resending_it', async ({
   page,
 }) => {
