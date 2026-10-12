@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import type { ReactElement } from 'react';
 import type { PostPlan } from '@mawjivo/core';
+import { youtubeCategoryNames } from '@mawjivo/core';
 import { platformNames } from './useComposer';
 export function ReviewPage({
   plan,
@@ -55,6 +56,13 @@ export function ReviewPage({
         سيتم النشر على {plan.targets.length} منصات
         {date ? ' في ' + date + ' (' + timeZone + ').' : '.'}
       </p>
+      {plan.targets
+        .filter((target) => target.platform === 'youtube' && target.youtubeCategoryId)
+        .map((target) => (
+          <p key={'category-' + target.channelId}>
+            فئة يوتيوب: {youtubeCategoryNames[target.youtubeCategoryId!]}
+          </p>
+        ))}
       {plan.notes.length > 0 && (
         <ul>
           {plan.notes.map((note, index) => (

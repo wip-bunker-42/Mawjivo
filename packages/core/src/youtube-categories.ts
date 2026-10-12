@@ -1,0 +1,36 @@
+// Supported IDs: https://developers.buffer.com/types/YoutubePostMetadataInput.html
+export const youtubeCategoryIds = [
+  '1',
+  '2',
+  '10',
+  '15',
+  '17',
+  '19',
+  '20',
+  '22',
+  '23',
+  '24',
+  '25',
+  '26',
+  '27',
+  '28',
+  '29',
+] as const;
+export type YoutubeCategoryId = (typeof youtubeCategoryIds)[number];
+export const youtubeCategoryNames: Record<YoutubeCategoryId, string> = {
+  '1': 'الأفلام والرسوم المتحركة',
+  '2': 'السيارات والمركبات',
+  '10': 'الموسيقى',
+  '15': 'الحيوانات الأليفة والحيوانات',
+  '17': 'الرياضة',
+  '19': 'السفر والفعاليات',
+  '20': 'الألعاب',
+  '22': 'الأشخاص والمدونات',
+  '23': 'الكوميديا',
+  '24': 'الترفيه',
+  '25': 'الأخبار والسياسة',
+  '26': 'الإرشادات والأسلوب',
+  '27': 'التعليم',
+  '28': 'العلوم والتكنولوجيا',
+  '29': 'المنظمات غير الربحية والنشاط الاجتماعي',
+};

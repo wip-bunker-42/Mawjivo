@@ -258,6 +258,7 @@ async function validate(
             [channel.platform]: {
               text: target.text,
               altTexts: target.altTexts,
+              ...(target.youtubeCategoryId ? { youtubeCategoryId: target.youtubeCategoryId } : {}),
               ...(target.threadParts.length ? { threadParts: target.threadParts } : {}),
             },
           },
@@ -275,7 +276,7 @@ async function validate(
       !expected ||
       checked.mediaRecipes.length ||
       checked.excluded.length ||
-      ['text', 'title', 'threadParts', 'altTexts'].some(
+      ['text', 'title', 'threadParts', 'altTexts', 'youtubeCategoryId'].some(
         (field) =>
           JSON.stringify(expected[field as keyof typeof expected]) !==
           JSON.stringify(target[field as keyof typeof target]),

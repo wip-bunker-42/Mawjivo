@@ -131,6 +131,8 @@ pub struct UploadTicket {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PlatformOverride {
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub youtube_category_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub text: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub alt_texts: Option<Vec<String>>,
@@ -201,6 +203,8 @@ pub struct MediaRecipe {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct TargetPlan {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub youtube_category_id: Option<String>,
     pub channel_id: String,
     pub connection_id: String,
     pub platform: Platform,

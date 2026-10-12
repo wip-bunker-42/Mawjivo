@@ -1,3 +1,4 @@
+import type { YoutubeCategoryId } from './youtube-categories';
 export const platforms = ['facebook', 'instagram', 'threads', 'x', 'youtube', 'tiktok'] as const;
 export type Platform = (typeof platforms)[number];
 export type Provider = 'meta' | 'buffer';
@@ -23,10 +24,16 @@ export interface Workspace {
   defaultPlatforms: Platform[];
   serviceProfileId: string;
   preferredChannels?: Partial<Record<Platform, string>> | undefined;
+  defaultYoutubeCategoryId?: YoutubeCategoryId | null | undefined;
 }
 export type WorkspaceInput = Pick<
   Workspace,
-  'name' | 'timeZone' | 'defaultPlatforms' | 'serviceProfileId' | 'preferredChannels'
+  | 'name'
+  | 'timeZone'
+  | 'defaultPlatforms'
+  | 'serviceProfileId'
+  | 'preferredChannels'
+  | 'defaultYoutubeCategoryId'
 >;
 export interface ConnectionInput {
   provider: Provider;
@@ -75,6 +82,7 @@ export interface UploadTicket {
   parts: { partNumber: number; url: string }[];
 }
 export interface PlatformOverride {
+  youtubeCategoryId?: YoutubeCategoryId | undefined;
   text?: string | undefined;
   altTexts?: string[] | undefined;
   threadParts?: string[] | undefined;
@@ -163,6 +171,7 @@ export interface MediaRecipe {
   quality?: number | undefined;
 }
 export interface TargetPlan {
+  youtubeCategoryId?: YoutubeCategoryId | undefined;
   channelId: string;
   connectionId: string;
   platform: Platform;

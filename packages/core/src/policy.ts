@@ -255,6 +255,10 @@ export function buildPlan(input: Draft, inputCaps: CapabilitySnapshot, now: ISOI
       assets: [],
       altTexts: [],
     };
+    if (videos.length && channel.platform === 'youtube') {
+      if (!override?.youtubeCategoryId) throw new Error('YOUTUBE_CATEGORY_REQUIRED');
+      target.youtubeCategoryId = override.youtubeCategoryId;
+    }
     if (videos.length)
       target.title =
         channel.limits.titleMax === undefined

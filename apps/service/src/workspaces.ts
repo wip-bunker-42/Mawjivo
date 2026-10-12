@@ -11,9 +11,10 @@ interface WorkspaceRow {
   default_platforms: string;
   service_profile_id: string;
   preferences_json: string;
+  youtube_category_json: string;
 }
 const projection =
-  "SELECT w.id,w.name,w.time_zone,w.version,w.default_platforms,w.service_profile_id,COALESCE(s.value_json,'{}') AS preferences_json FROM workspaces w LEFT JOIN service_settings s ON s.key='workspace-preferences:'||w.id";
+  "SELECT w.id,w.name,w.time_zone,w.version,w.default_platforms,w.service_profile_id,COALESCE(s.value_json,'{}') AS preferences_json,COALESCE(y.value_json,'null') AS youtube_category_json FROM workspaces w LEFT JOIN service_settings s ON s.key='workspace-preferences:'||w.id LEFT JOIN service_settings y ON y.key='workspace-youtube-category:'||w.id";
 function fromRow(row: WorkspaceRow): Workspace {
   return WorkspaceSchema.parse({
     id: row.id,
@@ -23,6 +24,7 @@ function fromRow(row: WorkspaceRow): Workspace {
     defaultPlatforms: JSON.parse(row.default_platforms),
     serviceProfileId: row.service_profile_id,
     preferredChannels: JSON.parse(row.preferences_json),
+    defaultYoutubeCategoryId: JSON.parse(row.youtube_category_json),
   });
 }
 export function validateWorkspaceInput(value: unknown): WorkspaceInput {
@@ -38,6 +40,7 @@ export function validateWorkspaceInput(value: unknown): WorkspaceInput {
           'defaultPlatforms',
           'serviceProfileId',
           'preferredChannels',
+          'defaultYoutubeCategoryId',
           'expectedVersion',
         ].includes(field),
     )
@@ -53,6 +56,9 @@ export function validateWorkspaceInput(value: unknown): WorkspaceInput {
     defaultPlatforms: [...new Set(candidate.data.defaultPlatforms)],
     serviceProfileId: candidate.data.serviceProfileId,
     preferredChannels: candidate.data.preferredChannels ?? {},
+    ...(candidate.data.defaultYoutubeCategoryId !== undefined
+      ? { defaultYoutubeCategoryId: candidate.data.defaultYoutubeCategoryId }
+      : {}),
   };
 }
 export async function listWorkspaces(auth: AuthContext, env: Env): Promise<Workspace[]> {
@@ -83,20 +89,31 @@ export async function createWorkspace(
     now = Date.now();
   if (Object.keys(valid.preferredChannels ?? {}).length)
     throw new ServiceError('CHANNEL_NOT_READY', 'اربط الحسابات قبل تعيين الحسابات الافتراضية.');
-  await env.DB.prepare(
+  const insert = env.DB.prepare(
     'INSERT INTO workspaces(id,name,time_zone,version,default_platforms,service_profile_id,created_at_ms,updated_at_ms) VALUES(?,?,?,1,?,?,?,?)',
-  )
-    .bind(
-      id,
-      valid.name,
-      valid.timeZone,
-      JSON.stringify(valid.defaultPlatforms),
-      valid.serviceProfileId,
-      now,
-      now,
-    )
-    .run();
-  return { id, ...valid, version: 1 };
+  ).bind(
+    id,
+    valid.name,
+    valid.timeZone,
+    JSON.stringify(valid.defaultPlatforms),
+    valid.serviceProfileId,
+    now,
+    now,
+  );
+  const category = env.DB.prepare(
+    'INSERT INTO service_settings(key,value_json,updated_at_ms) VALUES(?,?,?)',
+  ).bind(
+    'workspace-youtube-category:' + id,
+    JSON.stringify(valid.defaultYoutubeCategoryId ?? null),
+    now,
+  );
+  await env.DB.batch([insert, category]);
+  return {
+    id,
+    ...valid,
+    defaultYoutubeCategoryId: valid.defaultYoutubeCategoryId ?? null,
+    version: 1,
+  };
 }
 export async function updateWorkspace(
   auth: AuthContext,
@@ -141,8 +158,20 @@ export async function updateWorkspace(
     id,
     expectedVersion,
   );
-  const result = await env.DB.batch([preferences, update]);
-  if (!result[1]?.meta.changes) {
+  const category =
+    valid.defaultYoutubeCategoryId !== undefined
+      ? env.DB.prepare(
+          'INSERT INTO service_settings(key,value_json,updated_at_ms) SELECT ?,?,? FROM workspaces WHERE id=? AND version=? ON CONFLICT(key) DO UPDATE SET value_json=excluded.value_json,updated_at_ms=excluded.updated_at_ms',
+        ).bind(
+          'workspace-youtube-category:' + id,
+          JSON.stringify(valid.defaultYoutubeCategoryId),
+          Date.now(),
+          id,
+          expectedVersion,
+        )
+      : null;
+  const result = await env.DB.batch([preferences, ...(category ? [category] : []), update]);
+  if (!result.at(-1)?.meta.changes) {
     await getWorkspace(auth, id, env);
     throw new ServiceError(
       'VERSION_CONFLICT',

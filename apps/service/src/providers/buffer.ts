@@ -1,4 +1,5 @@
 import type { Channel, ChannelLimits, Platform } from '@mawjivo/core';
+import { youtubeCategoryIds } from '@mawjivo/core';
 import type {
   DecryptedConnection,
   ProviderAdapter,
@@ -419,7 +420,7 @@ function postInput(target: ResolvedTarget, remoteId: string): Record<string, unk
     };
   if (target.platform === 'youtube')
     metadata.youtube = {
-      categoryId: '22',
+      categoryId: target.youtubeCategoryId,
       title: target.title ?? '',
       privacy: 'public',
       madeForKids: false,
@@ -452,8 +453,25 @@ export async function publishBatch(
   for (let start = 0; start < targets.length; start += 30) {
     const batch = targets.slice(start, start + 30),
       channels = await remoteChannels(connection, batch, env),
-      valid = batch.filter((t) => channels.has(t.channelId));
+      valid = batch.filter(
+        (t) =>
+          channels.has(t.channelId) &&
+          (t.platform !== 'youtube' ||
+            (t.youtubeCategoryId !== undefined &&
+              youtubeCategoryIds.includes(t.youtubeCategoryId))),
+      );
     const byChannel = new Map<string, ProviderResult>();
+    for (const t of batch)
+      if (channels.has(t.channelId) && t.platform === 'youtube' && !valid.includes(t))
+        byChannel.set(t.channelId, {
+          kind: 'rejected',
+          channelId: t.channelId,
+          error: {
+            code: 'YOUTUBE_CATEGORY_REQUIRED',
+            messageAr: 'اختر فئة الفيديو على يوتيوب قبل النشر.',
+            retryable: false,
+          },
+        });
     for (const t of batch)
       if (!channels.has(t.channelId))
         byChannel.set(t.channelId, {

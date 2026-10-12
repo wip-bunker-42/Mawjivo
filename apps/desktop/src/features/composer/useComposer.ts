@@ -113,6 +113,7 @@ function planError(error: unknown): string {
     (
       {
         VIDEO_TITLE_REQUIRED: 'اكتب عنوان الفيديو؛ نستخدمه أيضًا لاسم الملف.',
+        YOUTUBE_CATEGORY_REQUIRED: 'اختر فئة الفيديو على يوتيوب قبل النشر.',
         EMPTY_POST: 'اكتب نصًا أو اختر وسائط.',
         MIXED_MEDIA: 'اختر صورًا معًا أو فيديو واحدًا.',
         SCHEDULE_IN_PAST: 'اختر موعدًا بعد الوقت الحالي.',
@@ -142,6 +143,7 @@ function draftFromDetail(detail: PostDetail, workspace: Workspace): Draft {
     overrides[target.platform] = {
       text: target.text,
       altTexts: target.altTexts,
+      ...(target.youtubeCategoryId ? { youtubeCategoryId: target.youtubeCategoryId } : {}),
       ...(target.threadParts.length ? { threadParts: target.threadParts } : {}),
     };
   const fileName = detail.plan.targets
@@ -492,7 +494,23 @@ export function useComposer(workspace: Workspace, editing?: PostDetail) {
           message(owner, 'اختر حتى 20 صورة معًا أو فيديو واحدًا.');
           return;
         }
-        update(owner, { assets: [...existing, asset] });
+        const youtube = owner.draft.overrides.youtube;
+        update(owner, {
+          assets: [...existing, asset],
+          ...(asset.kind === 'video' &&
+          !youtube?.youtubeCategoryId &&
+          owner.workspace.defaultYoutubeCategoryId
+            ? {
+                overrides: {
+                  ...owner.draft.overrides,
+                  youtube: {
+                    ...youtube,
+                    youtubeCategoryId: owner.workspace.defaultYoutubeCategoryId,
+                  },
+                },
+              }
+            : {}),
+        });
         void upload(owner, asset, file.fileId, null);
       }
       variants(owner);

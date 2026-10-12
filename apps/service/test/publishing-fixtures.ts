@@ -79,6 +79,7 @@ export function images(t: ResolvedTarget): ResolvedTarget {
 export function video(t: ResolvedTarget): ResolvedTarget {
   return {
     ...t,
+    ...(t.platform === 'youtube' ? { youtubeCategoryId: '25' as const } : {}),
     title: 'عنوان الفيديو',
     assets: [
       {

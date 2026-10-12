@@ -1,4 +1,17 @@
-use mawjivo_lib::contracts::{AssetUse, Draft};
+use mawjivo_lib::contracts::{AssetUse, Draft, TargetPlan};
+#[test]
+fn selected_youtube_category_survives_native_draft_and_submission() {
+    let mut expected: serde_json::Value = serde_json::from_str(include_str!(
+        "../../../../packages/core/test/contract-fixture.json"
+    ))
+    .unwrap();
+    expected["overrides"]["youtube"] = serde_json::json!({"youtubeCategoryId":"25"});
+    let draft: Draft = serde_json::from_value(expected.clone()).unwrap();
+    assert_eq!(serde_json::to_value(draft).unwrap(), expected);
+    let expected_target = serde_json::json!({"channelId":"yt","connectionId":"buffer","platform":"youtube","provider":"buffer","text":"خبر","title":"عنوان","youtubeCategoryId":"25","threadParts":[],"assets":[],"altTexts":[]});
+    let target: TargetPlan = serde_json::from_value(expected_target.clone()).unwrap();
+    assert_eq!(serde_json::to_value(target).unwrap(), expected_target);
+}
 #[test]
 fn draft_json_roundtrip_preserves_every_shared_field() {
     let json = include_str!("../../../../packages/core/test/contract-fixture.json");

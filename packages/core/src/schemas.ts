@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { platforms } from './contracts';
+import { youtubeCategoryIds } from './youtube-categories';
 import type {
   Draft,
   PostPlan,
@@ -86,6 +87,7 @@ export const UploadInputSchema: z.ZodType<UploadInput> = z
       (input.recipeId !== null || input.fileId === input.sourceAssetId),
   );
 const override = z.strictObject({
+  youtubeCategoryId: z.enum(youtubeCategoryIds).optional(),
   text: z.string().max(100_000).optional(),
   altTexts: z.array(z.string().max(100_000)).optional(),
   threadParts: z.array(z.string().max(100_000)).optional(),
@@ -126,6 +128,7 @@ export const WorkspaceSchema: z.ZodType<Workspace> = z.strictObject({
   defaultPlatforms: z.array(PlatformSchema),
   serviceProfileId: id,
   preferredChannels: z.partialRecord(PlatformSchema, id).optional(),
+  defaultYoutubeCategoryId: z.enum(youtubeCategoryIds).nullable().optional(),
 });
 export const ConnectionInputSchema = z.strictObject({
   provider: ProviderSchema,
@@ -191,6 +194,7 @@ const assetUse = z.strictObject({
     .optional(),
 });
 const target = z.strictObject({
+  youtubeCategoryId: z.enum(youtubeCategoryIds).optional(),
   channelId: id,
   connectionId: id,
   platform: PlatformSchema,

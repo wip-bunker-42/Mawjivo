@@ -13,7 +13,7 @@ export function draft(overrides: Partial<Draft> = {}): Draft {
     text: 'منشور عربي',
     title: '',
     assets: [],
-    overrides: {},
+    overrides: { youtube: { youtubeCategoryId: '25' } },
     ...overrides,
   };
 }

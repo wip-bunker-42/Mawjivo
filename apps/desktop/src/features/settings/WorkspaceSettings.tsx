@@ -1,7 +1,14 @@
 import { useEffect, useState } from 'react';
 import type { FormEvent, ReactElement } from 'react';
 import { platforms } from '@mawjivo/core';
-import type { CapabilitySnapshot, Platform, Workspace, WorkspaceInput } from '@mawjivo/core';
+import type {
+  CapabilitySnapshot,
+  Platform,
+  Workspace,
+  WorkspaceInput,
+  YoutubeCategoryId,
+} from '@mawjivo/core';
+import { YoutubeCategorySelect } from '../../components/YoutubeCategorySelect';
 import { errorMessage, serviceRequest } from '../../bridge';
 import type { ServiceProfile } from '../../bridge';
 export function WorkspaceSettings({
@@ -19,6 +26,9 @@ export function WorkspaceSettings({
     [name, setName] = useState(workspace?.name ?? ''),
     [timeZone, setTimeZone] = useState(workspace?.timeZone ?? 'Africa/Cairo');
   const [createProfileId, setCreateProfileId] = useState(profile?.id ?? '');
+  const [youtubeCategory, setYoutubeCategory] = useState<YoutubeCategoryId | null>(
+    workspace?.defaultYoutubeCategoryId ?? null,
+  );
   const selectedProfile = create
     ? (profiles.find((item) => item.id === (createProfileId || profile?.id)) ?? null)
     : profile;
@@ -60,6 +70,7 @@ export function WorkspaceSettings({
         defaultPlatforms: defaults,
         serviceProfileId: selectedProfile.id,
         preferredChannels: create ? {} : preferred,
+        defaultYoutubeCategoryId: youtubeCategory,
       };
       const saved = await serviceRequest<Workspace>(
         selectedProfile.id,
@@ -89,6 +100,7 @@ export function WorkspaceSettings({
             setTimeZone('Africa/Cairo');
             setDefaults([...platforms]);
             setPreferred({});
+            setYoutubeCategory(null);
             setMessage('');
           }}
         >
@@ -141,6 +153,13 @@ export function WorkspaceSettings({
             maxLength={100}
           />
         </div>
+        <YoutubeCategorySelect
+          id="workspace-youtube-category"
+          label="فئة يوتيوب الافتراضية"
+          value={youtubeCategory}
+          onChange={(value) => setYoutubeCategory(value ?? null)}
+          disabled={busy}
+        />
         <fieldset>
           <legend>المنصات الافتراضية</legend>
           {platforms.map((platform) => (

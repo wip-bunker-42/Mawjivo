@@ -131,14 +131,30 @@ test('a_slow_video_batch_keeps_its_accepted_ids_without_republishing', async () 
   }
 });
 
-test('youtube_video_creation_includes_the_required_category', async () => {
+test('youtube_video_creation_sends_the_category_the_user_reviewed', async () => {
   const calls = capture({
     data: {
       p0: { __typename: 'PostActionSuccess', post: { id: 'youtube-video', status: 'sending' } },
     },
   });
-  await publishBatch(bufferConnection, [video(await target('youtube'))], testEnv());
-  expect(Object.values(calls[0]!.variables)[0].metadata.youtube.categoryId).toBe('22');
+  const selected = { ...video(await target('youtube')), youtubeCategoryId: '25' as const };
+  await publishBatch(bufferConnection, [selected], testEnv());
+  expect(Object.values(calls[0]!.variables)[0].metadata.youtube.categoryId).toBe('25');
+});
+
+test('missing_youtube_category_rejects_only_that_target_before_a_provider_write', async () => {
+  const calls = capture({
+    data: { p0: { __typename: 'PostActionSuccess', post: { id: 'post-x', status: 'sending' } } },
+  });
+  const missing = { ...video(await target('youtube')), youtubeCategoryId: undefined };
+  const results = await publishBatch(bufferConnection, [missing, await target('x')], testEnv());
+  expect(results[0]).toMatchObject({
+    kind: 'rejected',
+    error: { code: 'YOUTUBE_CATEGORY_REQUIRED' },
+  });
+  expect(results[1]).toMatchObject({ kind: 'accepted', remoteId: 'post-x' });
+  expect(calls).toHaveLength(1);
+  expect(Object.values(calls[0]!.variables).map((v) => v.channelId)).toEqual(['remote-x']);
 });
 test('threads_include_the_first_post_and_ordered_image_alt_text', async () => {
   const t = images(await target('threads'));

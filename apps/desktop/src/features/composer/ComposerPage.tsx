@@ -8,6 +8,7 @@ import { PlatformFields } from './PlatformFields';
 import { ReviewPage } from './ReviewPage';
 import { SavedDrafts } from './SavedDrafts';
 import { DateTextInput } from '../../components/DateTextInput';
+import { YoutubeCategorySelect } from '../../components/YoutubeCategorySelect';
 export function ComposerPage({
   workspace,
   editing,
@@ -85,6 +86,20 @@ export function ComposerPage({
             onMove={composer.reorder}
             onResume={(job) => void composer.resume(job)}
           />
+          {draft.assets.some((asset) => asset.kind === 'video') &&
+            caps.channels.some(
+              (channel) => channel.platform === 'youtube' && draft.selections.includes(channel.id),
+            ) && (
+              <YoutubeCategorySelect
+                id="video-youtube-category"
+                label="فئة هذا الفيديو على يوتيوب"
+                value={draft.overrides.youtube?.youtubeCategoryId}
+                onChange={(youtubeCategoryId) =>
+                  composer.override('youtube', { youtubeCategoryId })
+                }
+                required
+              />
+            )}
           <fieldset>
             <legend>منصات النشر</legend>
             {platforms.map((platform) => {

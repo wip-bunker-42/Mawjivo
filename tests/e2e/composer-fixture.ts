@@ -24,16 +24,22 @@ export async function composerFixture(
     unavailableProfile?: boolean;
     savedWindows?: boolean;
     restoredWindow?: number;
+    youtubeCategory?: string | null;
   } = {},
 ): Promise<void> {
   await page.addInitScript((options) => {
     const windowId = options.windowId ?? 'main';
-    const workspaces = ['a', 'b'].map((id, index) => ({
+    let workspaces = ['a', 'b'].map((id, index) => ({
       id: 'space-' + id,
       name: index ? 'مساحة ثانية' : 'مساحتي',
       timeZone: 'Africa/Cairo',
       version: 1,
       defaultPlatforms: index ? ['threads'] : ['x', 'instagram', 'youtube'],
+      defaultYoutubeCategoryId: index
+        ? '20'
+        : options.youtubeCategory === undefined
+          ? '25'
+          : options.youtubeCategory,
       serviceProfileId: 'profile-1',
       preferredChannels: {},
     }));
@@ -538,6 +544,18 @@ export async function composerFixture(
                 dueAt: submission.plan.dueAt,
               };
               return historyReceipt;
+            }
+            if (
+              args!.method === 'PATCH' &&
+              path.startsWith('/api/workspaces/') &&
+              !path.includes('/posts')
+            ) {
+              workspaces = workspaces.map((item) =>
+                path.endsWith(item.id)
+                  ? { ...item, ...(args!.body as any), version: item.version + 1 }
+                  : item,
+              );
+              return workspaces.find((item) => path.endsWith(item.id));
             }
             if (path === '/api/workspaces') return workspaces;
             if (path.endsWith('/capabilities'))
