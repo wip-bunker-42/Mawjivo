@@ -69,6 +69,14 @@ impl ProvisionState {
 pub struct LocalStore {
     db: Mutex<Connection>,
 }
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SavedComposer {
+    pub window_id: String,
+    pub draft_id: String,
+    pub preview: String,
+    pub created_at: String,
+}
 fn storage_error(_: impl std::fmt::Debug) -> AppError {
     AppError::new(
         "LOCAL_STORE",
@@ -128,6 +136,36 @@ fn apply_local_migration(
     transaction.commit().map_err(storage_error)
 }
 impl LocalStore {
+    pub fn saved_composers(
+        &self,
+        profile: &str,
+        workspace: &str,
+        active_windows: &[String],
+    ) -> Result<Vec<SavedComposer>, AppError> {
+        let db = self.lock()?;
+        let mut statement = db.prepare(
+            "SELECT c.window_id,c.draft_id,substr(COALESCE(NULLIF(json_extract(d.body,'$.title'),''),json_extract(d.body,'$.text'),''),1,80),COALESCE(json_extract(d.body,'$.createdAt'),'') FROM composer_drafts c JOIN drafts d ON d.profile_id=c.profile_id AND d.workspace_id=c.workspace_id AND d.id=c.draft_id WHERE c.profile_id=? AND c.workspace_id=? AND c.window_id LIKE 'composer-%' AND c.window_id NOT IN (SELECT value FROM json_each(?)) ORDER BY d.rowid DESC",
+        ).map_err(storage_error)?;
+        statement
+            .query_map(
+                params![
+                    profile,
+                    workspace,
+                    serde_json::to_string(active_windows).map_err(storage_error)?
+                ],
+                |row| {
+                    Ok(SavedComposer {
+                        window_id: row.get(0)?,
+                        draft_id: row.get(1)?,
+                        preview: row.get(2)?,
+                        created_at: row.get(3)?,
+                    })
+                },
+            )
+            .map_err(storage_error)?
+            .map(|row| row.map_err(storage_error))
+            .collect()
+    }
     pub fn window_draft(
         &self,
         profile: &str,

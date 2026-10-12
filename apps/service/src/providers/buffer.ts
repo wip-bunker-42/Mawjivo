@@ -614,7 +614,13 @@ export async function readReceipts(
         receipts.push({
           remoteId,
           state: 'unknown',
-          error: providerError('PROVIDER_RECEIPT', true),
+          error: providerError(
+            reply.kind === 'deferred' ||
+              (reply.kind === 'response' && reply.response.status === 429)
+              ? 'PROVIDER_RATE_LIMIT'
+              : 'PROVIDER_RECEIPT',
+            true,
+          ),
           ...(reply.kind === 'deferred'
             ? { retryAt: reply.retryAt }
             : reply.kind === 'response' && reply.response.status === 429

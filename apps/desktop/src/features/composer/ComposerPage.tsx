@@ -6,6 +6,7 @@ import { useComposer, platformNames } from './useComposer';
 import { MediaPicker } from './MediaPicker';
 import { PlatformFields } from './PlatformFields';
 import { ReviewPage } from './ReviewPage';
+import { SavedDrafts } from './SavedDrafts';
 export function ComposerPage({
   workspace,
   editing,
@@ -39,6 +40,7 @@ export function ComposerPage({
   return (
     <section aria-labelledby="composer-heading">
       <h3 id="composer-heading">{draft.editingPost ? 'تعديل المنشور' : 'تفاصيل المنشور'}</h3>
+      <SavedDrafts workspace={workspace} />
       <form
         onSubmit={(e) => {
           e.preventDefault();

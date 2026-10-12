@@ -167,6 +167,20 @@ export const listUploads = (profileId: string, workspaceId: string) =>
 export const restoreUploads = (profileId: string, workspaceId: string, sourceAssetIds: string[]) =>
   native<UploadJob[]>('restore_uploads', { profileId, workspaceId, sourceAssetIds });
 export const openComposerWindow = () => native<string>('open_composer_window');
+export interface SavedComposer {
+  windowId: string;
+  draftId: string;
+  preview: string;
+  createdAt: string;
+}
+export const savedComposers = (profileId: string, workspaceId: string) =>
+  native<SavedComposer[]>('list_saved_composers', { profileId, workspaceId });
+export const openSavedComposer = (
+  profileId: string,
+  workspaceId: string,
+  windowId: string,
+  draftId: string,
+) => native<string>('open_saved_composer', { profileId, workspaceId, windowId, draftId });
 export function onUploadProgress(
   windowId: string,
   callback: (progress: UploadProgress) => void,

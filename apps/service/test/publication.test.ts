@@ -486,13 +486,11 @@ test('instagram_checkpoint_is_durable_and_an_ambiguous_continuation_never_repeat
       continuation: { kind: 'instagram-publish', containerId: 'container-one' },
     },
   ]);
-  const continuation = vi
-    .spyOn(metaAdapter, 'continuePublishing')
-    .mockResolvedValue({
-      kind: 'uncertain',
-      channelId: 'publish-x',
-      error: { code: 'PROVIDER_UNCERTAIN', messageAr: 'تحقق من المنصة.', retryable: false },
-    });
+  const continuation = vi.spyOn(metaAdapter, 'continuePublishing').mockResolvedValue({
+    kind: 'uncertain',
+    channelId: 'publish-x',
+    error: { code: 'PROVIDER_UNCERTAIN', messageAr: 'تحقق من المنصة.', retryable: false },
+  });
   const job = { postId: fixture.receipt.postId, revision: 1 };
   await runPublication(job, workflowSteps().step, fixture.env);
   await retryPost(auth, job.postId, 1, fixture.env);
@@ -505,16 +503,14 @@ test('instagram_checkpoint_is_durable_and_an_ambiguous_continuation_never_repeat
 test('a_known_rejected_instagram_continuation_retries_the_container_without_reuploading', async () => {
   const fixture = await instagramFixture(),
     state = { kind: 'instagram' as const, childIds: ['child-one'], containerId: 'container-one' };
-  const publish = vi
-    .spyOn(metaAdapter, 'publishBatch')
-    .mockResolvedValue([
-      {
-        kind: 'accepted',
-        channelId: 'publish-x',
-        remoteId: 'ig-container:container-one',
-        providerState: state,
-      },
-    ]);
+  const publish = vi.spyOn(metaAdapter, 'publishBatch').mockResolvedValue([
+    {
+      kind: 'accepted',
+      channelId: 'publish-x',
+      remoteId: 'ig-container:container-one',
+      providerState: state,
+    },
+  ]);
   vi.spyOn(metaAdapter, 'readReceipts').mockImplementation(async (_connection, ids) =>
     ids.map((remoteId) =>
       remoteId.startsWith('ig-container:')
@@ -579,3 +575,160 @@ test('a_partial_chain_receipt_exposes_saved_part_outcomes_and_never_retries_deli
   await runPublication(job, workflowSteps().step, fixture.env);
   expect(publish).toHaveBeenCalledTimes(1);
 });
+
+test.each(['deferred', 'http429', 'network'] as const)(
+  'real_buffer_receipts_resume_after_%s_without_republishing',
+  async (failure) => {
+    const fixture = await publicationFixture();
+    let writes = 0,
+      reads = 0;
+    const fetcher = vi.spyOn(globalThis, 'fetch').mockImplementation(async (_input, options) => {
+      const query = JSON.parse(String(options?.body)).query as string;
+      if (query.includes('createPost')) {
+        writes++;
+        return Response.json(
+          { data: { p0: { __typename: 'PostActionSuccess', post: { id: 'known-buffer-id' } } } },
+          failure === 'deferred'
+            ? {
+                headers: {
+                  RateLimit: '"short";r=0;t=120',
+                  'RateLimit-Policy': '"short";q=100;w=900',
+                },
+              }
+            : undefined,
+        );
+      }
+      expect(query).toContain('MawjivoReceipts');
+      reads++;
+      if (reads === 1 && failure === 'http429')
+        return Response.json({}, { status: 429, headers: { 'Retry-After': '120' } });
+      if (reads === 1 && failure === 'network') throw new TypeError('temporary read outage');
+      return Response.json(
+        { data: { r0: { id: 'known-buffer-id', status: 'sent' } } },
+        {
+          headers: { RateLimit: '"short";r=99;t=900', 'RateLimit-Policy': '"short";q=100;w=900' },
+        },
+      );
+    });
+    const receipt = await submitPost(auth, await fixture.submission(), fixture.env);
+    const steps = workflowSteps();
+    await runPublication({ postId: receipt.postId, revision: 1 }, steps.step, fixture.env);
+    expect((await getPublicationReceipt(auth, receipt.postId, fixture.env)).state).toBe(
+      'published',
+    );
+    expect(writes).toBe(1);
+    expect(reads).toBe(failure === 'deferred' ? 1 : 2);
+    expect(fetcher).toHaveBeenCalledTimes(writes + reads);
+    if (failure !== 'network')
+      expect(steps.sleeps.some((at) => at.getTime() >= Date.parse('2026-10-11T09:02:00Z'))).toBe(
+        true,
+      );
+  },
+);
+
+test.each([false, true])(
+  'scheduled_publication_after_capability_refresh_changed_%s',
+  async (changed) => {
+    const fixture = await publicationFixture();
+    const receipt = await submitPost(
+      auth,
+      await fixture.submission({ scheduleLocal: '2026-10-11T15:00', scheduleOffset: '+03:00' }),
+      fixture.env,
+    );
+    vi.setSystemTime(new Date('2026-10-11T10:00:00Z'));
+    const refreshed = structuredClone(fixture.caps.channels);
+    refreshed[0]!.limits.verifiedAt = new Date().toISOString();
+    if (changed) refreshed[0]!.limits.textMax = 100;
+    vi.spyOn(bufferAdapter, 'discover').mockResolvedValue(refreshed);
+    const { getCapabilities } = await import('../src/connections');
+    await getCapabilities(auth, fixture.draft.workspaceId, fixture.env, true);
+    const writes = vi
+      .spyOn(bufferAdapter, 'publishBatch')
+      .mockResolvedValue([
+        { kind: 'accepted', channelId: 'publish-x', remoteId: 'refreshed-scheduled-id' },
+      ]);
+    vi.spyOn(bufferAdapter, 'readReceipts').mockResolvedValue([
+      { remoteId: 'refreshed-scheduled-id', state: 'published' },
+    ]);
+    await runPublication(
+      { postId: receipt.postId, revision: 1 },
+      workflowSteps().step,
+      fixture.env,
+    );
+    const final = await getPublicationReceipt(auth, receipt.postId, fixture.env);
+    expect(final.state).toBe(changed ? 'failed' : 'published');
+    expect(writes).toHaveBeenCalledTimes(changed ? 0 : 1);
+    if (changed) expect(final.targets[0]!.error?.code).toBe('REVIEW_REQUIRED');
+  },
+);
+
+test.each(['recover', 'cancel', 'ambiguous'] as const)(
+  'staged_instagram_recovery_%s_preserves_the_continuation_claim',
+  async (mode) => {
+    const fixture = await instagramFixture();
+    const staged = { kind: 'instagram', childIds: ['child-one'], containerId: 'staged-one' };
+    await fixture.env.DB.prepare(
+      "UPDATE targets SET state='accepted',claim_id='staged-claim',remote_id='ig-container:staged-one',provider_state_json=?,next_check_ms=?,updated_at_ms=?,continuation_claim_id=? WHERE post_id=?",
+    )
+      .bind(
+        JSON.stringify(staged),
+        Date.now(),
+        Date.now(),
+        mode === 'ambiguous' ? 'possibly-sent' : null,
+        fixture.receipt.postId,
+      )
+      .run();
+    if (mode === 'cancel') await cancelPost(auth, fixture.receipt.postId, 1, fixture.env);
+    for (const instance of fixture.workflow.instances.values())
+      instance.status = async () => ({ status: 'errored' });
+    vi.setSystemTime(new Date('2026-10-11T09:06:00Z'));
+    const { runMonitor } = await import('../src/monitoring');
+    await runMonitor(new Date().toISOString(), fixture.env);
+    const upload = vi.spyOn(metaAdapter, 'publishBatch');
+    let reads = 0;
+    vi.spyOn(metaAdapter, 'readReceipts').mockImplementation(async (_connection, ids) => {
+      reads++;
+      return ids.map((remoteId) =>
+        remoteId === 'ig-media:finished-one'
+          ? { remoteId, state: 'published' as const }
+          : mode === 'cancel' && reads > 1
+            ? {
+                remoteId,
+                state: 'failed' as const,
+                error: { code: 'PROVIDER_FAILED', messageAr: 'انتهت الحاوية.', retryable: false },
+              }
+            : {
+                remoteId,
+                state: 'processing' as const,
+                continuation: { kind: 'instagram-publish' as const, containerId: 'staged-one' },
+              },
+      );
+    });
+    const continuation = vi.spyOn(metaAdapter, 'continuePublishing').mockResolvedValue({
+      kind: 'accepted',
+      channelId: 'publish-x',
+      remoteId: 'ig-media:finished-one',
+      providerState: { ...staged, kind: 'instagram', publishedId: 'finished-one' },
+    });
+    const recovered = fixture.workflow.create.mock.calls[1]?.[0];
+    if (mode === 'ambiguous') {
+      expect(recovered).toBeUndefined();
+      expect((await getPublicationReceipt(auth, fixture.receipt.postId, fixture.env)).state).toBe(
+        'uncertain',
+      );
+    } else {
+      expect(recovered).toMatchObject({ params: { receiptsOnly: true } });
+      await runPublication(
+        recovered!.params! as { postId: string; revision: number; receiptsOnly: true },
+        workflowSteps().step,
+        fixture.env,
+      );
+      expect(continuation).toHaveBeenCalledTimes(mode === 'recover' ? 1 : 0);
+      if (mode === 'recover')
+        expect((await getPublicationReceipt(auth, fixture.receipt.postId, fixture.env)).state).toBe(
+          'published',
+        );
+    }
+    expect(upload).not.toHaveBeenCalled();
+  },
+);

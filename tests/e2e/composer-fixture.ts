@@ -18,6 +18,10 @@ export async function composerFixture(
     saveFailure?: boolean;
     profileDelayMs?: number;
     oldDraftCreatedAt?: string;
+    preparationDelayMs?: number;
+    unavailableProfile?: boolean;
+    savedWindows?: boolean;
+    restoredWindow?: number;
   } = {},
 ): Promise<void> {
   await page.addInitScript((options) => {
@@ -116,6 +120,34 @@ export async function composerFixture(
         scheduleOffset: null,
       });
     let preparationFailed = false;
+    const savedWindows = [1, 2].map((index) => ({
+      windowId: 'composer-' + String(index).repeat(32),
+      draftId: 'saved-secondary-' + index,
+      preview: 'مسودة النافذة ' + index,
+      createdAt: '2026-10-10T09:00:00Z',
+    }));
+    if (options.restoredWindow) {
+      const saved = savedWindows[options.restoredWindow - 1]!;
+      drafts.set('space-b', {
+        id: saved.draftId,
+        workspaceId: 'space-b',
+        workspaceVersion: 1,
+        timeZone: 'Africa/Cairo',
+        revision: 3,
+        createdAt: saved.createdAt,
+        text: saved.preview,
+        title: '',
+        assets: [],
+        selections: ['ch-threads'],
+        overrides: {},
+        scheduleLocal: null,
+        scheduleOffset: null,
+      });
+      Object.assign(globalThis, {
+        __MAWJIVO_INITIAL_WORKSPACE__: { profileId: 'profile-1', workspaceId: 'space-b' },
+      });
+    }
+    const preparingFiles = new Set<string>();
     const emit = (event: string, payload: unknown) => {
       for (const id of listeners.get(event) ?? []) callbacks.get(id)?.({ event, id, payload });
     };
@@ -315,6 +347,18 @@ export async function composerFixture(
                 deviceCredentialRef: 'synthetic',
                 version: '0.1.0',
               },
+              ...(options.unavailableProfile
+                ? [
+                    {
+                      id: 'profile-unavailable',
+                      baseUrl: 'https://unavailable.test',
+                      serviceId: 'unavailable',
+                      accountId: 'synthetic',
+                      deviceCredentialRef: 'synthetic',
+                      version: '0.1.0',
+                    },
+                  ]
+                : []),
             ];
           }
           if (command === 'composer_context')
@@ -332,6 +376,8 @@ export async function composerFixture(
           if (command === 'acknowledge_update_flush') return null;
           if (command === 'load_draft') return drafts.get(String(args!.workspaceId)) ?? null;
           if (command === 'open_composer_window') return 'composer-' + crypto.randomUUID();
+          if (command === 'list_saved_composers') return options.savedWindows ? savedWindows : [];
+          if (command === 'open_saved_composer') return args!.windowId;
           if (command === 'pick_media')
             return options.deferredPick
               ? new Promise((resolve) => {
@@ -340,6 +386,21 @@ export async function composerFixture(
               : selectedFiles;
           if (command === 'probe_media') return sources.find((item) => item.id === args!.fileId);
           if (command === 'prepare_media') {
+            if (options.preparationDelayMs) {
+              const fileId = String(args!.fileId);
+              if (preparingFiles.has(fileId))
+                throw {
+                  code: 'MEDIA_BUSY',
+                  messageAr: 'هذا الملف قيد المعالجة بالفعل.',
+                  retryable: true,
+                };
+              preparingFiles.add(fileId);
+              try {
+                await new Promise((resolve) => setTimeout(resolve, options.preparationDelayMs));
+              } finally {
+                preparingFiles.delete(fileId);
+              }
+            }
             if (options.prepareFailureOnce && !preparationFailed) {
               preparationFailed = true;
               throw {
@@ -389,6 +450,12 @@ export async function composerFixture(
           )
             return null;
           if (command === 'service_request') {
+            if (options.unavailableProfile && args!.profileId === 'profile-unavailable')
+              throw {
+                code: 'SERVICE_UNAVAILABLE',
+                messageAr: 'الخدمة غير متاحة؛ افحص الربط.',
+                retryable: true,
+              };
             const path = String(args!.path);
             if (path.endsWith('/telegram'))
               return { configured: args!.method === 'POST', chatId: '', daily: true, reports: [] };

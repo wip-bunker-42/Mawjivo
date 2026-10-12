@@ -173,3 +173,59 @@ fn an_old_draft_source_is_not_lost_after_two_hundred_newer_uploads() {
     );
     assert!(registry.file_for("main", "old-source").is_ok());
 }
+
+#[test]
+fn saved_secondary_drafts_are_discoverable_after_restart_without_ephemeral_window_ids() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("recovery.sqlite");
+    let store = LocalStore::open(&path).unwrap();
+    let mut profile = ProvisionState::new("account");
+    profile.profile.id = "profile".into();
+    store.save_state(&profile).unwrap();
+    let mut draft: Draft = serde_json::from_str(include_str!(
+        "../../../../packages/core/test/contract-fixture.json"
+    ))
+    .unwrap();
+    draft.workspace_id = "space".into();
+    draft.title.clear();
+    let labels = [composer_window_label(), composer_window_label()];
+    for (index, label) in labels.iter().enumerate() {
+        draft.id = format!("secondary-{index}");
+        draft.text = format!("مسودة {index}");
+        store.save_draft("profile", label, &draft).unwrap();
+    }
+    drop(store);
+    let store = LocalStore::open(&path).unwrap();
+    let saved = store
+        .saved_composers("profile", "space", &["main".into()])
+        .unwrap();
+    assert_eq!(saved.len(), 2);
+    for item in &saved {
+        assert!(labels.contains(&item.window_id));
+        let reopened = store
+            .window_draft("profile", &item.window_id, "space")
+            .unwrap()
+            .unwrap();
+        assert_eq!(reopened.id, item.draft_id);
+        assert_eq!(reopened.text, item.preview);
+    }
+    assert_eq!(
+        store
+            .saved_composers("profile", "space", &labels)
+            .unwrap()
+            .len(),
+        0
+    );
+    assert!(
+        store
+            .saved_composers("other", "space", &[])
+            .unwrap()
+            .is_empty()
+    );
+    assert!(
+        store
+            .saved_composers("profile", "other", &[])
+            .unwrap()
+            .is_empty()
+    );
+}

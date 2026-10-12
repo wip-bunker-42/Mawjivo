@@ -169,6 +169,7 @@ function draftFromDetail(detail: PostDetail, workspace: Workspace): Draft {
 }
 export function useComposer(workspace: Workspace, editing?: PostDetail) {
   const sessions = useRef(new Map<string, Session>()),
+    preparations = useRef(new Map<string, Promise<void>>()),
     current = useRef<Session | null>(null),
     alive = useRef(true);
   const [, render] = useState(0),
@@ -234,7 +235,23 @@ export function useComposer(workspace: Workspace, editing?: PostDetail) {
     session.jobs.set(key, job);
     repaint(session);
     try {
-      const local = recipe ? await prepareMedia(fileId, recipe) : null;
+      let local = null;
+      if (recipe) {
+        const previous = preparations.current.get(fileId) ?? Promise.resolve();
+        const preparation = previous.then(() =>
+          session.draft.assets.some((a) => a.id === asset.id) ? prepareMedia(fileId, recipe) : null,
+        );
+        const finished = preparation.then(
+          () => {},
+          () => {},
+        );
+        preparations.current.set(fileId, finished);
+        try {
+          local = await preparation;
+        } finally {
+          if (preparations.current.get(fileId) === finished) preparations.current.delete(fileId);
+        }
+      }
       if (!session.draft.assets.some((a) => a.id === asset.id)) return;
       const mimeType = local?.mimeType ?? asset.mimeType,
         bytes = local?.bytes ?? asset.bytes;

@@ -210,3 +210,44 @@ test('image_order_moves_the_corresponding_alt_text_and_chain_parts_are_editable'
   expect(target.altTexts).toEqual(['بديل الصورة الثانية', 'بديل الصورة الأولى']);
   expect(target.threadParts[0]).toBe('الجزء المعدل');
 });
+
+test('distinct_video_recipes_queue_for_one_source_and_each_uploads_once', async ({ page }) => {
+  await composerFixture(page, { media: 'video', preparationDelayMs: 100 });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'اختيار صور أو فيديو' }).click();
+  await page.getByLabel('عنوان الفيديو').fill('عنوان للنسختين');
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (globalThis as any).__MAWJIVO_TEST__.calls.filter(
+            (c: any) => c.command === 'prepare_media',
+          ).length,
+      ),
+    )
+    .toBe(2);
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          [...(globalThis as any).__MAWJIVO_TEST__.jobs.values()].filter(
+            (job: any) => job.recipeId !== null,
+          ).length,
+      ),
+    )
+    .toBe(2);
+  const inputs = await page.evaluate(() =>
+    (globalThis as any).__MAWJIVO_TEST__.calls
+      .filter((c: any) => c.command === 'start_upload')
+      .map((c: any) => c.args.input),
+  );
+  expect(inputs.filter((input: any) => input.recipeId === null)).toHaveLength(1);
+  expect(
+    new Set(
+      inputs.filter((input: any) => input.recipeId !== null).map((input: any) => input.recipeId),
+    ).size,
+  ).toBe(2);
+  await page.evaluate(() => (globalThis as any).__MAWJIVO_TEST__.finish());
+  await page.getByRole('button', { name: 'مراجعة النشر' }).click();
+  await expect(page.getByRole('button', { name: 'موافق، انشر' })).toBeEnabled();
+});

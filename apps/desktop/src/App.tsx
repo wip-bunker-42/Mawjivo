@@ -24,6 +24,11 @@ const pages = [
 type PageId = (typeof pages)[number]['id'];
 
 export function App(): ReactElement {
+  const initialWorkspace = (
+    globalThis as typeof globalThis & {
+      __MAWJIVO_INITIAL_WORKSPACE__?: { profileId: string; workspaceId: string };
+    }
+  ).__MAWJIVO_INITIAL_WORKSPACE__;
   useEffect(() => {
     let active = true;
     const stops: (() => void)[] = [];
@@ -78,15 +83,33 @@ export function App(): ReactElement {
   }, []);
   useEffect(() => {
     let active = true;
-    void Promise.all(
+    void Promise.allSettled(
       profiles.map(async (item) => serviceRequest<Workspace[]>(item.id, 'GET', '/api/workspaces')),
     )
       .then((groups) => {
         if (active) {
-          const items = groups.flat();
+          const items = groups.flatMap((group) =>
+            group.status === 'fulfilled' ? group.value : [],
+          );
+          const failures = groups.flatMap((group, index) =>
+            group.status === 'rejected'
+              ? [profiles[index]!.baseUrl + ': ' + errorMessage(group.reason)]
+              : [],
+          );
+          setMessage(
+            failures.length ? failures.join(' ') + ' راجع خدمة Cloudflare في الإعدادات.' : '',
+          );
           setWorkspaces(items);
           setWorkspaceId((current) =>
-            items.some((item) => item.id === current) ? current : (items[0]?.id ?? ''),
+            items.some((item) => item.id === current)
+              ? current
+              : (items.find(
+                  (item) =>
+                    item.id === initialWorkspace?.workspaceId &&
+                    item.serviceProfileId === initialWorkspace.profileId,
+                )?.id ??
+                items[0]?.id ??
+                ''),
           );
         }
       })

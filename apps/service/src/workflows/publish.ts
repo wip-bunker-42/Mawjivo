@@ -23,6 +23,30 @@ const safeReadRetry = {
   timeout: '1 minute' as const,
 };
 const adapters: Record<string, ProviderAdapter> = { buffer: bufferAdapter, meta: metaAdapter };
+function publicationLimitsMatch(current: string, frozen: string): boolean {
+  function canonical(value: unknown): string {
+    if (Array.isArray(value)) return '[' + value.map(canonical).join(',') + ']';
+    if (value !== null && typeof value === 'object')
+      return (
+        '{' +
+        Object.entries(value)
+          .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+          .map(([key, item]) => JSON.stringify(key) + ':' + canonical(item))
+          .join(',') +
+        '}'
+      );
+    return JSON.stringify(value);
+  }
+  function relevant(json: string): unknown {
+    const { verifiedAt: _verifiedAt, source: _source, ...limits } = JSON.parse(json);
+    return limits;
+  }
+  try {
+    return canonical(relevant(current)) === canonical(relevant(frozen));
+  } catch {
+    return false;
+  }
+}
 function uncertain(): AppError {
   return {
     code: 'PUBLICATION_UNCERTAIN',
@@ -152,13 +176,14 @@ async function saveReceipt(
 ): Promise<void> {
   const failedThread =
     receipt.state === 'failed' && target.threadParts.length > 1 && !receipt.partReceipts;
-  const rateWait =
-    receipt.state === 'unknown' &&
-    receipt.error?.code === 'PROVIDER_RATE_LIMIT' &&
-    receipt.retryAt &&
-    Number.isFinite(Date.parse(receipt.retryAt)) &&
-    Date.parse(receipt.retryAt) > Date.now();
-  const state = rateWait
+  // A failed read cannot revoke the accepted write or authorize a second write.
+  const readWait = receipt.state === 'unknown' && receipt.error?.retryable === true;
+  const requestedCheck = receipt.retryAt ? Date.parse(receipt.retryAt) : NaN;
+  const nextCheck =
+    Number.isFinite(requestedCheck) && requestedCheck > Date.now()
+      ? requestedCheck
+      : Date.now() + Math.min(3600000, 60000 * 5 ** Math.min(row.receipt_attempts, 3));
+  const state = readWait
     ? 'accepted'
     : failedThread || receipt.state === 'unknown'
       ? 'uncertain'
@@ -175,14 +200,7 @@ async function saveReceipt(
       state,
       receipt.publicUrl ?? null,
       error ? JSON.stringify(error) : null,
-      state === 'accepted'
-        ? Date.parse(
-            receipt.retryAt ??
-              new Date(
-                Date.now() + Math.min(3600000, 60000 * 5 ** Math.min(row.receipt_attempts, 3)),
-              ).toISOString(),
-          )
-        : null,
+      state === 'accepted' ? nextCheck : null,
       state === 'published'
         ? receipt.publishedAt && Number.isFinite(Date.parse(receipt.publishedAt))
           ? Date.parse(receipt.publishedAt)
@@ -264,7 +282,7 @@ async function publishConnection(
       !channel?.ready ||
       channel.connection_id !== frozenChannel.connectionId ||
       channel.remote_id !== frozenChannel.remoteId ||
-      channel.limits_json !== frozenChannel.limitsJson ||
+      !publicationLimitsMatch(channel.limits_json, frozenChannel.limitsJson) ||
       channel.provider !== frozenChannel.provider ||
       channel.platform !== frozenChannel.platform
     ) {
@@ -397,7 +415,7 @@ async function continueMeta(job: PublishJob, plan: PostPlan, env: Env): Promise<
       continue;
     const claimId = crypto.randomUUID(),
       claimed = await env.DB.prepare(
-        "UPDATE targets SET continuation_claim_id=?,updated_at_ms=? WHERE post_id=? AND revision=? AND channel_id=? AND state='accepted' AND continuation_claim_id IS NULL",
+        "UPDATE targets SET continuation_claim_id=?,updated_at_ms=? WHERE post_id=? AND revision=? AND channel_id=? AND state='accepted' AND continuation_claim_id IS NULL AND EXISTS(SELECT 1 FROM posts p WHERE p.id=targets.post_id AND p.revision=targets.revision AND p.cancel_requested_ms IS NULL)",
       )
         .bind(claimId, Date.now(), job.postId, job.revision, target.channelId)
         .run();
@@ -476,8 +494,9 @@ export async function runPublication(job: PublishJob, step: WorkflowStep, env: E
       await step.do('receipt-' + cycle + '-' + connection, safeReadRetry, () =>
         receiptConnection(job, plan, connection, env),
       );
-    if (!job.receiptsOnly)
-      await step.do('meta-continuation-' + cycle, noWriteRetry, () => continueMeta(job, plan, env));
+    // Recovery may finish an unattempted container. The target claim and current
+    // cancellation/revision guard still prohibit replaying an ambiguous write.
+    await step.do('meta-continuation-' + cycle, noWriteRetry, () => continueMeta(job, plan, env));
   }
   await step.do('final-state', safeReadRetry, () => aggregatePost(job.postId, job.revision, env));
 }

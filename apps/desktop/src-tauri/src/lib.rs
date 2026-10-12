@@ -24,6 +24,8 @@ pub fn run() {
             commands::load_draft,
             windows::composer_context,
             windows::open_composer_window,
+            windows::list_saved_composers,
+            windows::open_saved_composer,
             commands::service_request,
             commands::configure_monitoring,
             updates::tauri_backend::check_update,
