@@ -17,6 +17,7 @@ export async function composerFixture(
     deferredSave?: boolean;
     saveFailure?: boolean;
     profileDelayMs?: number;
+    oldDraftCreatedAt?: string;
   } = {},
 ): Promise<void> {
   await page.addInitScript((options) => {
@@ -98,17 +99,17 @@ export async function composerFixture(
       bytes: item.bytes,
       mimeType: item.mimeType,
     }));
-    if (options.restoreError)
+    if (options.restoreError || options.oldDraftCreatedAt)
       drafts.set('space-a', {
         id: 'saved-draft',
         workspaceId: 'space-a',
         workspaceVersion: 1,
         revision: 1,
-        createdAt: new Date().toISOString(),
+        createdAt: options.oldDraftCreatedAt ?? new Date().toISOString(),
         timeZone: 'Africa/Cairo',
         text: 'مسودة محفوظة',
         title: '',
-        assets: sources,
+        assets: options.restoreError ? sources : [],
         selections: ['ch-x'],
         overrides: {},
         scheduleLocal: null,

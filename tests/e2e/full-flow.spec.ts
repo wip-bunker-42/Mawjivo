@@ -3,6 +3,15 @@ import { composerFixture } from './composer-fixture';
 import { spawn } from 'node:child_process';
 import { resolve } from 'node:path';
 
+test('a_restored_unscheduled_draft_defaults_to_ten_hours_after_reopening', async ({ page }) => {
+  await page.clock.setFixedTime(new Date('2026-10-11T09:23:37.123Z'));
+  await composerFixture(page, { oldDraftCreatedAt: '2026-10-09T00:00:00Z' });
+  await page.goto('/');
+  await expect(page.getByLabel('النص أو الوصف', { exact: true })).toHaveValue('مسودة محفوظة');
+  await page.getByRole('checkbox', { name: 'جدولة النشر' }).check();
+  await expect(page.getByLabel('وقت النشر')).toHaveValue('2026-10-11T22:23:37.123');
+});
+
 async function runWorkerContract(captured: unknown): Promise<void> {
   await new Promise<void>((resolveRun, reject) => {
     const child = spawn(

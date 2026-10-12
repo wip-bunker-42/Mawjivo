@@ -85,7 +85,11 @@ function defaults(workspace: Workspace, caps: CapabilitySnapshot): string[] {
     return selected ? [selected.id] : [];
   });
 }
-function newDraft(workspace: Workspace, caps: CapabilitySnapshot): Draft {
+function newDraft(
+  workspace: Workspace,
+  caps: CapabilitySnapshot,
+  createdAt = new Date().toISOString(),
+): Draft {
   return {
     id: crypto.randomUUID(),
     workspaceId: workspace.id,
@@ -99,7 +103,7 @@ function newDraft(workspace: Workspace, caps: CapabilitySnapshot): Draft {
     overrides: {},
     scheduleLocal: null,
     scheduleOffset: null,
-    createdAt: new Date().toISOString(),
+    createdAt,
   };
 }
 const jobKey = (source: string, recipe: string | null) => JSON.stringify([source, recipe]);
@@ -290,6 +294,7 @@ export function useComposer(workspace: Workspace, editing?: PostDetail) {
     };
   }, []);
   useEffect(() => {
+    const viewCreatedAt = new Date().toISOString();
     let active = true,
       unlisten: (() => void) | undefined;
     setReview(null);
@@ -298,6 +303,8 @@ export function useComposer(workspace: Workspace, editing?: PostDetail) {
     const key = workspace.serviceProfileId + ':' + workspace.id;
     const old = sessions.current.get(key);
     if (old) {
+      if (old.draft.scheduleLocal === null)
+        old.localSchedule = localTime(defaultSchedule(viewCreatedAt), workspace.timeZone);
       current.current = old;
       setLoading(false);
       render((n) => n + 1);
@@ -312,7 +319,9 @@ export function useComposer(workspace: Workspace, editing?: PostDetail) {
         if (!active) return;
         const caps = CapabilitySnapshotSchema.parse(snapshot);
         let detail = editing;
-        let draft = context.draft ? DraftSchema.parse(context.draft) : newDraft(workspace, caps);
+        let draft = context.draft
+          ? DraftSchema.parse(context.draft)
+          : newDraft(workspace, caps, viewCreatedAt);
         if (
           editing &&
           !(
@@ -352,7 +361,7 @@ export function useComposer(workspace: Workspace, editing?: PostDetail) {
           draft: { ...draft, workspaceVersion: workspace.version, timeZone: workspace.timeZone },
           caps,
           localSchedule:
-            draft.scheduleLocal ?? localTime(defaultSchedule(draft.createdAt), workspace.timeZone),
+            draft.scheduleLocal ?? localTime(defaultSchedule(viewCreatedAt), workspace.timeZone),
           jobs: new Map(),
           busy: new Set(),
           message: '',
