@@ -108,6 +108,7 @@ test('acceptance_announces_once_keeps_a_30_second_h2_receipt_and_unlocks_a_new_d
   await page.getByRole('checkbox', { name: 'Instagram', exact: true }).uncheck();
   await page.getByRole('checkbox', { name: 'YouTube', exact: true }).uncheck();
   await page.getByRole('button', { name: 'مراجعة النشر' }).click();
+  await page.clock.pauseAt(new Date((await page.evaluate(() => Date.now())) + 1000));
   await page.getByRole('button', { name: 'موافق، انشر' }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.getByRole('heading', { level: 2, name: 'تم استلام المنشور' })).toBeVisible();
