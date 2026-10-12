@@ -3,7 +3,12 @@ import { POLICY_VERSION, type PostPlan, type AppError } from '@mawjivo/core';
 import { claimTarget, aggregatePost, type TargetRow, type RevisionRow } from '../posts';
 import { loadConnection } from '../connections';
 import { bufferAdapter } from '../providers/buffer';
-import { metaAdapter } from '../providers/meta';
+import {
+  metaAdapter,
+  likeFacebookPublication,
+  facebookLikeError,
+  type FacebookLikeResult,
+} from '../providers/meta';
 import type {
   ProviderAdapter,
   ProviderState,
@@ -456,6 +461,63 @@ async function continueMeta(job: PublishJob, plan: PostPlan, env: Env): Promise<
   }
   await aggregatePost(job.postId, job.revision, env);
 }
+async function likePublishedFacebook(job: PublishJob, plan: PostPlan, env: Env): Promise<void> {
+  for (const target of plan.targets.filter(
+    (t) => t.platform === 'facebook' && t.provider === 'meta',
+  )) {
+    const row = (await rows(job, env)).find((r) => r.channel_id === target.channelId);
+    if (row?.state !== 'published' || !row.remote_id) continue;
+    if (
+      row.facebook_like_state === 'sending' &&
+      row.facebook_like_claimed_at_ms !== null &&
+      row.facebook_like_claimed_at_ms < Date.now() - 300000
+    ) {
+      await env.DB.prepare(
+        "UPDATE targets SET facebook_like_state='unknown',error_json=?,updated_at_ms=? WHERE post_id=? AND revision=? AND channel_id=? AND state='published' AND facebook_like_state='sending' AND facebook_like_claimed_at_ms=?",
+      )
+        .bind(
+          JSON.stringify(facebookLikeError(true)),
+          Date.now(),
+          job.postId,
+          job.revision,
+          target.channelId,
+          row.facebook_like_claimed_at_ms,
+        )
+        .run();
+      continue;
+    }
+    if (row.facebook_like_state !== null) continue;
+    const claimedAt = Date.now();
+    const claimed = await env.DB.prepare(
+      "UPDATE targets SET facebook_like_state='sending',facebook_like_claimed_at_ms=?,updated_at_ms=? WHERE post_id=? AND revision=? AND channel_id=? AND state='published' AND facebook_like_state IS NULL AND remote_id=? AND EXISTS(SELECT 1 FROM posts p WHERE p.id=targets.post_id AND p.revision=targets.revision AND p.cancel_requested_ms IS NULL)",
+    )
+      .bind(claimedAt, claimedAt, job.postId, job.revision, target.channelId, row.remote_id)
+      .run();
+    if (!claimed.meta.changes) continue;
+    let result: FacebookLikeResult;
+    try {
+      result = await likeFacebookPublication(
+        await loadConnection(plan.workspaceId, target.connectionId, env),
+        row.remote_id,
+      );
+    } catch {
+      result = { state: 'unknown', error: facebookLikeError(true) };
+    }
+    await env.DB.prepare(
+      "UPDATE targets SET facebook_like_state=?,error_json=COALESCE(?,error_json),updated_at_ms=? WHERE post_id=? AND revision=? AND channel_id=? AND state='published' AND facebook_like_state='sending' AND facebook_like_claimed_at_ms=?",
+    )
+      .bind(
+        result.state,
+        result.error ? JSON.stringify(result.error) : null,
+        Date.now(),
+        job.postId,
+        job.revision,
+        target.channelId,
+        claimedAt,
+      )
+      .run();
+  }
+}
 export async function runPublication(job: PublishJob, step: WorkflowStep, env: Env): Promise<void> {
   const snapshot = await step.do('confirmed-plan', safeReadRetry, async () =>
     env.DB.prepare(
@@ -497,7 +559,11 @@ export async function runPublication(job: PublishJob, step: WorkflowStep, env: E
     // Recovery may finish an unattempted container. The target claim and current
     // cancellation/revision guard still prohibit replaying an ambiguous write.
     await step.do('meta-continuation-' + cycle, noWriteRetry, () => continueMeta(job, plan, env));
+    await step.do('facebook-likes-' + cycle, noWriteRetry, () =>
+      likePublishedFacebook(job, plan, env),
+    );
   }
+  await step.do('facebook-likes-final', noWriteRetry, () => likePublishedFacebook(job, plan, env));
   await step.do('final-state', safeReadRetry, () => aggregatePost(job.postId, job.revision, env));
 }
 export class PublishWorkflow extends WorkflowEntrypoint<Env, PublishJob> {

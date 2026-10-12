@@ -427,7 +427,12 @@ function postInput(target: ResolvedTarget, remoteId: string): Record<string, unk
       notifySubscribers: true,
     };
   if (target.platform === 'tiktok')
-    metadata.tiktok = { ...(target.title ? { title: target.title } : {}), isAiGenerated: false };
+    metadata.tiktok = {
+      ...(target.assets[0]?.mimeType.startsWith('image/') && target.title
+        ? { title: target.title }
+        : {}),
+      isAiGenerated: false,
+    };
   if (target.platform === 'instagram')
     metadata.instagram = {
       type: target.assets[0]?.mimeType.startsWith('video/') ? 'reel' : 'post',
@@ -456,11 +461,32 @@ export async function publishBatch(
       valid = batch.filter(
         (t) =>
           channels.has(t.channelId) &&
+          !(
+            t.platform === 'tiktok' &&
+            t.assets[0]?.mimeType.startsWith('image/') &&
+            (!t.title?.trim() || t.title.length > 90)
+          ) &&
           (t.platform !== 'youtube' ||
             (t.youtubeCategoryId !== undefined &&
               youtubeCategoryIds.includes(t.youtubeCategoryId))),
       );
     const byChannel = new Map<string, ProviderResult>();
+    for (const t of batch)
+      if (
+        channels.has(t.channelId) &&
+        t.platform === 'tiktok' &&
+        t.assets[0]?.mimeType.startsWith('image/') &&
+        !valid.includes(t)
+      )
+        byChannel.set(t.channelId, {
+          kind: 'rejected',
+          channelId: t.channelId,
+          error: {
+            code: 'TIKTOK_PHOTO_TITLE_REQUIRED',
+            messageAr: 'اكتب عنوانًا غير فارغ لصور تيكتوك، في حدود 90 حرفًا.',
+            retryable: false,
+          },
+        });
     for (const t of batch)
       if (channels.has(t.channelId) && t.platform === 'youtube' && !valid.includes(t))
         byChannel.set(t.channelId, {

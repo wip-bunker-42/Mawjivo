@@ -86,6 +86,9 @@ export function ReviewPage({
         <details key={target.channelId}>
           <summary>تفاصيل {platformNames[target.platform]}</summary>
           {target.title && <p>العنوان: {target.title}</p>}
+          {target.platform === 'facebook' && target.provider === 'meta' && (
+            <p>بعد نجاح النشر، سيتم الإعجاب بالمنشور باسم الصفحة.</p>
+          )}
           {target.assets.some((asset) => asset.sentName) && (
             <p>
               اسم ملف الفيديو: <bdi>{target.assets.find((asset) => asset.sentName)!.sentName}</bdi>

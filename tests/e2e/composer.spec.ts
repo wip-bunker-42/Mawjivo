@@ -2,6 +2,42 @@ import { expect, test } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { composerFixture } from './composer-fixture';
 
+test('tiktok_photo_title_is_required_reviewed_and_preserved_in_the_saved_draft', async ({
+  page,
+}) => {
+  await composerFixture(page, { images: 2 });
+  await page.goto('/');
+  await page.getByRole('checkbox', { name: 'TikTok', exact: true }).check();
+  await expect(page.getByLabel('عنوان منشور الصور على تيكتوك')).toHaveCount(0);
+  await page.getByRole('button', { name: 'اختيار صور أو فيديو' }).click();
+  const title = page.getByLabel('عنوان منشور الصور على تيكتوك', { exact: true });
+  await expect(title).toBeVisible();
+  await expect(title).toHaveAttribute('required', '');
+  await page.getByRole('button', { name: 'مراجعة النشر' }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await title.fill('صور الرحلة');
+  await page.getByRole('button', { name: 'مراجعة النشر' }).click();
+  await expect(page.getByRole('dialog')).toContainText('صور الرحلة');
+  await page.getByRole('button', { name: 'رجوع للتعديل' }).click();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (globalThis as any).__MAWJIVO_TEST__.calls
+            .filter((c: any) => c.command === 'save_draft')
+            .at(-1)?.args.draft.title,
+      ),
+    )
+    .toBe('صور الرحلة');
+  await page.getByLabel('مساحة العمل', { exact: true }).selectOption('space-b');
+  await page.getByLabel('مساحة العمل', { exact: true }).selectOption('space-a');
+  await expect(page.getByLabel('عنوان منشور الصور على تيكتوك', { exact: true })).toHaveValue(
+    'صور الرحلة',
+  );
+  await page.getByRole('checkbox', { name: 'TikTok', exact: true }).uncheck();
+  await expect(page.getByLabel('عنوان منشور الصور على تيكتوك')).toHaveCount(0);
+});
+
 test('a_pending_dispatch_is_saved_without_claiming_a_successful_schedule', async ({ page }) => {
   await composerFixture(page, { publicationState: 'preparing' });
   await page.goto('/');

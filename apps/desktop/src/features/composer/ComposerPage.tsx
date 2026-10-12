@@ -41,6 +41,15 @@ export function ComposerPage({
   const ambiguous = draft.scheduleLocal
     ? resolveSchedule(draft.scheduleLocal, draft.timeZone)
     : null;
+  const tiktokPhotos =
+    draft.assets.some((asset) => asset.kind === 'image') &&
+    caps.channels.some(
+      (channel) =>
+        channel.platform === 'tiktok' &&
+        channel.ready &&
+        channel.limits.supportedKinds.includes('image') &&
+        draft.selections.includes(channel.id),
+    );
   return (
     <section aria-labelledby="composer-heading">
       <h3 id="composer-heading">{draft.editingPost ? 'تعديل المنشور' : 'تفاصيل المنشور'}</h3>
@@ -74,6 +83,21 @@ export function ComposerPage({
               />
               <p id="video-title-help">
                 نستخدم العنوان لاسم الملف عند إرساله وللمنصات التي تتطلب عنوانًا.
+              </p>
+            </div>
+          )}
+          {tiktokPhotos && (
+            <div className="form-field">
+              <label htmlFor="tiktok-photo-title">عنوان منشور الصور على تيكتوك</label>
+              <input
+                id="tiktok-photo-title"
+                required
+                value={draft.title}
+                onChange={(e) => composer.patch({ title: e.target.value })}
+                aria-describedby="tiktok-photo-title-help"
+              />
+              <p id="tiktok-photo-title-help">
+                عنوان للصورة أو مجموعة الصور. إذا تجاوز 90 حرفًا، نوضح قصّه قبل الموافقة.
               </p>
             </div>
           )}

@@ -11,6 +11,8 @@ export function providerError(code: string, retryable = false): AppError {
     PROVIDER_RECEIPT: 'تعذر التحقق من النتيجة الآن. ستستمر المتابعة.',
     PROVIDER_CHANNEL: 'حساب النشر غير جاهز أو لا ينتمي إلى مساحة العمل.',
     PROVIDER_CHECKPOINT: 'تعذر حفظ تقدم النشر. تحقق من المنصة قبل إعادة المحاولة.',
+    FACEBOOK_LIKE_FAILED: 'نُشر المنشور؛ تعذر الإعجاب به باسم الصفحة. لا حاجة لإعادة النشر.',
+    FACEBOOK_LIKE_UNCERTAIN: 'نُشر المنشور؛ تعذر حسم الإعجاب به باسم الصفحة. لا حاجة لإعادة النشر.',
   };
   return { code, messageAr: messages[code] ?? messages.PROVIDER_FAILED!, retryable };
 }

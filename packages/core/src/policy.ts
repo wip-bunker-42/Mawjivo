@@ -259,19 +259,19 @@ export function buildPlan(input: Draft, inputCaps: CapabilitySnapshot, now: ISOI
       if (!override?.youtubeCategoryId) throw new Error('YOUTUBE_CATEGORY_REQUIRED');
       target.youtubeCategoryId = override.youtubeCategoryId;
     }
-    if (videos.length)
+    const photoTitle = kind === 'image' && channel.platform === 'tiktok';
+    if (photoTitle && !draft.title.trim()) throw new Error('TIKTOK_PHOTO_TITLE_REQUIRED');
+    const titleLimit = photoTitle ? 90 : channel.limits.titleMax;
+    const rawTitle = photoTitle ? draft.title.trim() : draft.title;
+    if (videos.length || photoTitle)
       target.title =
-        channel.limits.titleMax === undefined
+        titleLimit === undefined
           ? draft.title
-          : truncate(
-              draft.title,
-              channel.limits.titleMax,
-              metric === 'weightedX' ? 'utf16' : metric,
-            );
-    if (target.title !== undefined && target.title !== draft.title)
+          : truncate(rawTitle, titleLimit, photoTitle || metric === 'weightedX' ? 'utf16' : metric);
+    if (target.title !== undefined && target.title !== rawTitle)
       note(channel, 'TITLE_TRUNCATED', 'قُص العنوان ليناسب الحد.', {
         original: [...draft.title].length,
-        limit: channel.limits.titleMax!,
+        limit: titleLimit!,
       });
     if (raw !== target.text)
       note(

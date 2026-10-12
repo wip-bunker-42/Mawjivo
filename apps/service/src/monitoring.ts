@@ -4,6 +4,7 @@ import { drainDispatchOutbox, aggregatePost, getPublicationReceipt, type PostRow
 import { collectExpiredAssets } from './assets/retention';
 import { evaluateDailySummaries } from './reports/daily';
 import { sendReport, failureReport } from './reports/telegram';
+import { facebookLikeError } from './providers/meta';
 export interface MonitorResult {
   serviceHealthy: boolean;
   dailyEvaluated: boolean;
@@ -101,6 +102,11 @@ async function recoverProgress(now: number, env: Env): Promise<boolean> {
   return healthy;
 }
 async function notifyOutcomes(now: number, env: Env): Promise<void> {
+  await env.DB.prepare(
+    "UPDATE targets SET facebook_like_state='unknown',error_json=?,updated_at_ms=? WHERE state='published' AND facebook_like_state='sending' AND facebook_like_claimed_at_ms<?",
+  )
+    .bind(JSON.stringify(facebookLikeError(true)), now, now - 300000)
+    .run();
   const rows = await env.DB.prepare(
     "SELECT t.post_id,t.revision,t.workspace_id,p.plan_json FROM targets t JOIN post_revisions p ON p.post_id=t.post_id AND p.revision=t.revision WHERE t.state IN ('failed','uncertain') AND NOT EXISTS(SELECT 1 FROM report_outbox r WHERE r.workspace_id=t.workspace_id AND r.dedupe_key='target:'||t.post_id||':'||t.revision||':'||t.channel_id||':'||t.state||':'||COALESCE(json_extract(t.error_json,'$.code'),'PROVIDER_FAILED')) GROUP BY t.post_id,t.revision,t.workspace_id LIMIT 20",
   ).all<{ post_id: string; revision: number; workspace_id: string; plan_json: string }>();
@@ -108,6 +114,28 @@ async function notifyOutcomes(now: number, env: Env): Promise<void> {
     const receipt = await getPublicationReceipt(systemAuth, row.post_id, env, row.revision);
     for (const target of receipt.targets)
       if (['failed', 'uncertain'].includes(target.state))
+        await sendReport(
+          failureReport(
+            row.workspace_id,
+            row.post_id,
+            row.revision,
+            target,
+            JSON.parse(row.plan_json).targets[0]?.title ||
+              JSON.parse(row.plan_json).targets[0]?.text,
+          ),
+          env,
+        );
+  }
+  const likes = await env.DB.prepare(
+    "SELECT t.post_id,t.revision,t.workspace_id,p.plan_json FROM targets t JOIN post_revisions p ON p.post_id=t.post_id AND p.revision=t.revision WHERE t.state='published' AND t.facebook_like_state IN ('failed','unknown') AND NOT EXISTS(SELECT 1 FROM report_outbox r WHERE r.workspace_id=t.workspace_id AND r.dedupe_key='facebook-like:'||t.post_id||':'||t.revision||':'||t.channel_id||':'||json_extract(t.error_json,'$.code')) GROUP BY t.post_id,t.revision,t.workspace_id LIMIT 20",
+  ).all<{ post_id: string; revision: number; workspace_id: string; plan_json: string }>();
+  for (const row of likes.results) {
+    const receipt = await getPublicationReceipt(systemAuth, row.post_id, env, row.revision);
+    for (const target of receipt.targets)
+      if (
+        target.state === 'published' &&
+        ['FACEBOOK_LIKE_FAILED', 'FACEBOOK_LIKE_UNCERTAIN'].includes(target.error?.code ?? '')
+      )
         await sendReport(
           failureReport(
             row.workspace_id,

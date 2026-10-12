@@ -179,6 +179,16 @@ export function failureReport(
     tiktok: 'TikTok',
   };
   const reason = providerError(target.error?.code ?? 'PROVIDER_FAILED').messageAr;
+  const likeWarning =
+    target.state === 'published' &&
+    ['FACEBOOK_LIKE_FAILED', 'FACEBOOK_LIKE_UNCERTAIN'].includes(target.error?.code ?? '');
+  if (likeWarning)
+    return {
+      workspaceId,
+      dedupeKey: `facebook-like:${postId}:${revision}:${target.channelId}:${target.error!.code}`,
+      kind: 'failure',
+      textAr: `Mawjivo — Facebook\nالمنشور: ${preview ? [...preview].slice(0, 120).join('') : postId}\nالخطوة: الإعجاب باسم الصفحة.\n${reason}\nافتح «ملخص» لقراءة تفاصيل المنشور.`,
+    };
   return {
     workspaceId,
     dedupeKey: `target:${postId}:${revision}:${target.channelId}:${target.state}:${target.error?.code ?? 'PROVIDER_FAILED'}`,

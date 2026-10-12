@@ -53,6 +53,8 @@ export interface TargetRow {
   receipt_attempts: number;
   continuation_claim_id: string | null;
   continuation_rejected: number;
+  facebook_like_state: 'sending' | 'liked' | 'failed' | 'unknown' | null;
+  facebook_like_claimed_at_ms: number | null;
 }
 export interface RevisionRow {
   post_id: string;

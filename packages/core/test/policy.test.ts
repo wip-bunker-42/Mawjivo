@@ -61,7 +61,11 @@ describe('publication plans', () => {
     expect(recipe.frameMode).toBe('pad');
   });
   test('x_uses_first_four_images', () => {
-    const plan = buildPlan(draft({ assets: [1, 2, 3, 4, 5].map(photo) }), caps(), now);
+    const plan = buildPlan(
+      draft({ title: 'صور المجموعة', assets: [1, 2, 3, 4, 5].map(photo) }),
+      caps(),
+      now,
+    );
     expect(
       plan.targets.find((t) => t.platform === 'x')?.assets.map((a) => a.sourceAssetId),
     ).toEqual(['photo-1', 'photo-2', 'photo-3', 'photo-4']);
@@ -86,6 +90,7 @@ describe('publication plans', () => {
     const plan = buildPlan(
       draft({
         text: 'أ'.repeat(1200),
+        title: 'صور المنشور',
         assets: [photo()],
         overrides: { x: { altTexts: ['بديل مخصص'] } },
       }),

@@ -114,6 +114,7 @@ function planError(error: unknown): string {
       {
         VIDEO_TITLE_REQUIRED: 'اكتب عنوان الفيديو؛ نستخدمه أيضًا لاسم الملف.',
         YOUTUBE_CATEGORY_REQUIRED: 'اختر فئة الفيديو على يوتيوب قبل النشر.',
+        TIKTOK_PHOTO_TITLE_REQUIRED: 'اكتب عنوان منشور الصور على تيكتوك قبل النشر.',
         EMPTY_POST: 'اكتب نصًا أو اختر وسائط.',
         MIXED_MEDIA: 'اختر صورًا معًا أو فيديو واحدًا.',
         SCHEDULE_IN_PAST: 'اختر موعدًا بعد الوقت الحالي.',

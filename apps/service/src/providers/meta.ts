@@ -211,6 +211,8 @@ class MetaFailure extends Error {
   }
 }
 interface MetaResponse {
+  success?: boolean;
+  summary?: { can_like?: boolean; has_liked?: boolean };
   id?: string;
   status_code?: string;
   status?: { video_status?: string; publishing_phase?: { status?: string } };
@@ -221,6 +223,50 @@ interface MetaResponse {
   permalink_url?: string;
   permalink?: string;
   error?: { code?: number; error_subcode?: number; is_transient?: boolean };
+}
+export interface FacebookLikeResult {
+  state: 'liked' | 'failed' | 'unknown';
+  error?: AppError;
+}
+export function facebookLikeError(uncertain: boolean, code?: string): AppError {
+  return {
+    code: uncertain ? 'FACEBOOK_LIKE_UNCERTAIN' : 'FACEBOOK_LIKE_FAILED',
+    messageAr: uncertain
+      ? 'نُشر المنشور؛ تعذر حسم الإعجاب به باسم الصفحة. لا حاجة لإعادة النشر.'
+      : code === 'PROVIDER_AUTH'
+        ? 'نُشر المنشور؛ تعذر الإعجاب به باسم الصفحة. راجع صلاحية إدارة التفاعل.'
+        : 'نُشر المنشور؛ تعذر الإعجاب به باسم الصفحة. لا حاجة لإعادة النشر.',
+    retryable: false,
+  };
+}
+export async function likeFacebookPublication(
+  connection: DecryptedConnection,
+  remoteId: string,
+): Promise<FacebookLikeResult> {
+  const match = /^(?:fb-post|fb-video):(\d{1,40}(?:_\d{1,40})?)$/.exec(remoteId);
+  if (!match || connection.provider !== 'meta' || !connection.credentials.pageAccessToken)
+    return { state: 'failed', error: facebookLikeError(false) };
+  const path = match[1]! + '/likes',
+    token = connection.credentials.pageAccessToken;
+  try {
+    const current = await metaRequest(path + '?limit=0&summary=true', token);
+    if (current.summary?.has_liked === true) return { state: 'liked' };
+    if (current.summary?.has_liked !== false || current.summary.can_like !== true)
+      return { state: 'failed', error: facebookLikeError(false, 'PROVIDER_AUTH') };
+    const result = await metaRequest(path, token, {});
+    return result.success === true
+      ? { state: 'liked' }
+      : { state: 'unknown', error: facebookLikeError(true) };
+  } catch (error) {
+    const ambiguous = error instanceof MetaFailure && error.uncertain;
+    return {
+      state: ambiguous ? 'unknown' : 'failed',
+      error: facebookLikeError(
+        ambiguous,
+        error instanceof MetaFailure ? error.safe.code : undefined,
+      ),
+    };
+  }
 }
 async function metaRequest(
   path: string,

@@ -8,6 +8,7 @@ import { workflowSteps } from './publication-fixture';
 import { bufferAdapter } from '../src/providers/buffer';
 import service from '../src/index';
 import { failureReport } from '../src/reports/telegram';
+import { saveTelegramSettings } from '../src/reports/settings';
 const heartbeat = 'https://hc-ping.com/00000000-0000-4000-8000-000000000001';
 test('failure_report_names_the_post_and_points_to_its_live_summary', () => {
   const report = failureReport(
@@ -29,6 +30,51 @@ test('failure_report_names_the_post_and_points_to_its_live_summary', () => {
   expect(report.textAr).toContain('عنوان المنشور الواضح');
   expect(report.textAr).toContain('«ملخص»');
   expect(report.textAr).not.toContain('synthetic secret');
+});
+
+test('a_like_warning_is_reported_once_without_claiming_failed_publication_or_false_recovery', async () => {
+  const fixture = await publicationFixture();
+  fixture.caps.channels[0]!.platform = 'facebook';
+  await fixture.env.DB.prepare("UPDATE channels SET platform='facebook' WHERE id=?")
+    .bind(fixture.caps.channels[0]!.id)
+    .run();
+  await fixture.env.DB.prepare('UPDATE service_settings SET value_json=? WHERE key=?')
+    .bind(JSON.stringify(fixture.caps), 'capabilities:workspace-a')
+    .run();
+  const receipt = await submitPost(auth, await fixture.submission(), fixture.env);
+  await fixture.env.DB.prepare(
+    "UPDATE targets SET state='published',facebook_like_state='failed',error_json=? WHERE post_id=?",
+  )
+    .bind(
+      JSON.stringify({
+        code: 'FACEBOOK_LIKE_FAILED',
+        messageAr: 'private provider detail',
+        retryable: false,
+      }),
+      receipt.postId,
+    )
+    .run();
+  await saveTelegramSettings(
+    auth,
+    'workspace-a',
+    { botToken: '123456:' + 't'.repeat(35), chatId: '1234', daily: false },
+    fixture.env,
+  );
+  const messages: string[] = [];
+  vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+    if (String(input).includes('api.telegram.org')) {
+      messages.push(JSON.parse(String(init?.body)).text);
+      return Response.json({ ok: true, result: { message_id: 99 } });
+    }
+    return new Response('OK');
+  });
+  await runMonitor('2026-10-11T09:01:00Z', fixture.env);
+  await runMonitor('2026-10-11T09:02:00Z', fixture.env);
+  expect(messages).toHaveLength(1);
+  expect(messages[0]).toContain('الإعجاب');
+  expect(messages[0]).toContain('نُشر');
+  expect(messages[0]).not.toContain('private provider detail');
+  expect(messages[0]).not.toContain('حُسمت نتيجة');
 });
 beforeEach(async () => {
   await resetTestData();

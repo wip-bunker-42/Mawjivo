@@ -142,6 +142,48 @@ test('youtube_video_creation_sends_the_category_the_user_reviewed', async () => 
   expect(Object.values(calls[0]!.variables)[0].metadata.youtube.categoryId).toBe('25');
 });
 
+test('tiktok_photo_creation_sends_the_reviewed_title_and_original_image_urls', async () => {
+  const calls = capture({
+    data: {
+      p0: { __typename: 'PostActionSuccess', post: { id: 'tiktok-photo', status: 'sending' } },
+    },
+  });
+  const selected = { ...images(await target('tiktok')), title: 'صور رحلتي' };
+  await publishBatch(bufferConnection, [selected], testEnv());
+  const input = Object.values(calls[0]!.variables)[0];
+  expect(input.metadata.tiktok.title).toBe('صور رحلتي');
+  expect(input.assets.map((a: any) => a.image.url)).toEqual(selected.assets.map((a) => a.url));
+});
+
+test('missing_tiktok_photo_title_rejects_only_that_target_before_provider_write', async () => {
+  const calls = capture({
+    data: { p0: { __typename: 'PostActionSuccess', post: { id: 'post-x', status: 'sending' } } },
+  });
+  const results = await publishBatch(
+    bufferConnection,
+    [images(await target('tiktok')), await target('x')],
+    testEnv(),
+  );
+  expect(results[0]).toMatchObject({
+    kind: 'rejected',
+    error: { code: 'TIKTOK_PHOTO_TITLE_REQUIRED' },
+  });
+  expect(results[1]).toMatchObject({ kind: 'accepted', remoteId: 'post-x' });
+  expect(Object.values(calls[0]!.variables).map((v: any) => v.channelId)).toEqual(['remote-x']);
+});
+
+test('tiktok_video_does_not_receive_the_photo_only_title_field', async () => {
+  const calls = capture({
+    data: {
+      p0: { __typename: 'PostActionSuccess', post: { id: 'tiktok-video', status: 'sending' } },
+    },
+  });
+  await publishBatch(bufferConnection, [video(await target('tiktok'))], testEnv());
+  const input = Object.values(calls[0]!.variables)[0];
+  expect(input.metadata.tiktok).not.toHaveProperty('title');
+  expect(input.assets[0].video.metadata.title).toBe('عنوان الفيديو');
+});
+
 test('missing_youtube_category_rejects_only_that_target_before_a_provider_write', async () => {
   const calls = capture({
     data: { p0: { __typename: 'PostActionSuccess', post: { id: 'post-x', status: 'sending' } } },
