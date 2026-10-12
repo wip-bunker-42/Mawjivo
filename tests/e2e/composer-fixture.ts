@@ -10,6 +10,8 @@ export async function composerFixture(
     restoreError?: boolean;
     publicationState?: 'preparing' | 'scheduled' | 'accepted';
     history?: boolean;
+    historyProgress?: boolean;
+    acceptedSavedDraft?: boolean;
     revisionConflict?: boolean;
     repairedRejection?: boolean;
     olderNativeDraft?: boolean;
@@ -80,7 +82,8 @@ export async function composerFixture(
       callbacks = new Map<number, (event: unknown) => void>(),
       listeners = new Map<string, number[]>();
     let callbackId = 0,
-      jobId = 0;
+      jobId = 0,
+      summaryRequests = 0;
     const kind = options.media ?? 'image',
       source = {
         id: 'file-1',
@@ -103,7 +106,7 @@ export async function composerFixture(
       bytes: item.bytes,
       mimeType: item.mimeType,
     }));
-    if (options.restoreError || options.oldDraftCreatedAt)
+    if (options.restoreError || options.oldDraftCreatedAt || options.acceptedSavedDraft)
       drafts.set('space-a', {
         id: 'saved-draft',
         workspaceId: 'space-a',
@@ -461,7 +464,12 @@ export async function composerFixture(
               return { configured: args!.method === 'POST', chatId: '', daily: true, reports: [] };
             if (path === '/api/monitoring')
               return { configured: false, lastCheckedAt: null, readiness: [] };
-            if (path.includes('/posts/draft/')) return options.history ? historyReceipt : null;
+            if (path.includes('/posts/draft/'))
+              return options.acceptedSavedDraft
+                ? { postId: 'posted', state: 'accepted', targets: [] }
+                : options.history
+                  ? historyReceipt
+                  : null;
             if (options.history && path.includes('/posts/list/'))
               return {
                 items:
@@ -471,7 +479,21 @@ export async function composerFixture(
                     : [historyReceipt],
                 nextCursor: null,
               };
-            if (options.history && path.includes('/summary'))
+            if (options.history && path.includes('/summary')) {
+              if (options.historyProgress) {
+                summaryRequests++;
+                historyReceipt = {
+                  ...historyReceipt,
+                  state: summaryRequests === 1 ? 'accepted' : 'published',
+                  targets: [
+                    {
+                      channelId: 'ch-x',
+                      platform: 'x',
+                      state: summaryRequests === 1 ? 'accepted' : 'published',
+                    },
+                  ],
+                };
+              }
               return {
                 localDate: path.split('/').at(-1),
                 timeZone: 'Africa/Cairo',
@@ -481,7 +503,11 @@ export async function composerFixture(
                 unknownPosts: 1,
                 publishedTargets: 6,
                 upcomingScheduled: historyReceipt.state === 'cancelled' ? 0 : 1,
+                receivedPosts: 1,
+                processingPosts: 0,
+                items: [{ ...historyReceipt, preview: scheduledDraft.text }],
               };
+            }
             if (options.history && path.endsWith('/scheduled-post/details'))
               return {
                 receipt: historyReceipt,

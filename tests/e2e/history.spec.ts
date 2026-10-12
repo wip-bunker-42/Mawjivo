@@ -82,7 +82,7 @@ test('summary_distinguishes_logical_posts_from_published_platforms_without_annou
   await page.getByRole('button', { name: 'ملخص', exact: true }).click();
   await expect(page.getByText('منشورات مكتملة: 1', { exact: true })).toBeVisible();
   await expect(page.getByText('وجهات منشورة: 6', { exact: true })).toBeVisible();
-  await expect(page.getByText('نتائج غير محسومة: 1', { exact: true })).toBeVisible();
+  await expect(page.getByText('منشورات تحتاج تأكيد نتيجة منصة: 1', { exact: true })).toBeVisible();
   await expect(page.locator('[aria-live]')).toHaveCount(0);
   const calls = await page.evaluate(() =>
     (globalThis as any).__MAWJIVO_TEST__.calls.filter(

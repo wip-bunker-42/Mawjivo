@@ -7,7 +7,29 @@ import { runPublication } from '../src/workflows/publish';
 import { workflowSteps } from './publication-fixture';
 import { bufferAdapter } from '../src/providers/buffer';
 import service from '../src/index';
+import { failureReport } from '../src/reports/telegram';
 const heartbeat = 'https://hc-ping.com/00000000-0000-4000-8000-000000000001';
+test('failure_report_names_the_post_and_points_to_its_live_summary', () => {
+  const report = failureReport(
+    'workspace-a',
+    'post-1',
+    1,
+    {
+      channelId: 'x',
+      platform: 'x',
+      state: 'uncertain',
+      error: {
+        code: 'PROVIDER_UNCERTAIN',
+        messageAr: 'synthetic secret must stay private',
+        retryable: false,
+      },
+    },
+    'عنوان المنشور الواضح',
+  );
+  expect(report.textAr).toContain('عنوان المنشور الواضح');
+  expect(report.textAr).toContain('«ملخص»');
+  expect(report.textAr).not.toContain('synthetic secret');
+});
 beforeEach(async () => {
   await resetTestData();
   vi.useFakeTimers({ toFake: ['Date'] });

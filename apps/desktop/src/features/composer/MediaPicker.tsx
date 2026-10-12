@@ -72,7 +72,12 @@ export function MediaPicker({
                               ? 'تعذر الرفع'
                               : 'جارٍ الرفع'}
                     </label>
-                    <progress id={job.jobId} max={job.totalBytes} value={job.completedBytes} />
+                    <progress
+                      aria-hidden="true"
+                      id={job.jobId}
+                      max={job.totalBytes}
+                      value={job.completedBytes}
+                    />
                     <span>
                       {Math.round((job.completedBytes / job.totalBytes) * 100).toLocaleString('ar')}
                       %؛ مضى {seconds(job.elapsedMs)} ثانية

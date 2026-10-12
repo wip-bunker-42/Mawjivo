@@ -356,7 +356,9 @@ async function exchange<T = NonNullable<BufferPayload['data']>>(
       },
       body: JSON.stringify({ query, variables }),
       redirect: 'manual',
-      signal: AbortSignal.timeout(25000),
+      // Video mutations may synchronously fetch media for several aliases.
+      // Read requests stay short; writes get time to return their accepted IDs.
+      signal: AbortSignal.timeout(purpose === 'publish' ? 120000 : 25000),
     });
   } catch {
     try {
@@ -417,6 +419,7 @@ function postInput(target: ResolvedTarget, remoteId: string): Record<string, unk
     };
   if (target.platform === 'youtube')
     metadata.youtube = {
+      categoryId: '22',
       title: target.title ?? '',
       privacy: 'public',
       madeForKids: false,

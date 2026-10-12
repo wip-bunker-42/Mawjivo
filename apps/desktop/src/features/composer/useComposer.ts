@@ -410,9 +410,11 @@ export function useComposer(workspace: Workspace, editing?: PostDetail) {
         } else if (context.draft) {
           const existing = await draftPublication(workspace, draft.id);
           if (existing) {
-            session.lastSubmission = 'saved';
+            session.draft = newDraft(workspace, session.caps, viewCreatedAt);
+            session.localSchedule = localTime(defaultSchedule(viewCreatedAt), workspace.timeZone);
             session.message =
-              'هذه المسودة مرتبطة بمنشور محفوظ. يمكنك تعديله من المجدولة أو بدء منشور جديد.';
+              'آخر منشور محفوظ في الخدمة؛ تابع نتائجه من «ملخص». النموذج جاهز لمنشور جديد.';
+            persist(session);
           }
         }
       }
@@ -674,7 +676,7 @@ export function useComposer(workspace: Workspace, editing?: PostDetail) {
     session &&
     needed.every((use) => session.jobs.get(jobKey(use.sourceAssetId, use.recipeId))?.ready),
   );
-  async function confirm(): Promise<void> {
+  async function confirm(): Promise<{ heading: string; message: string } | undefined> {
     if (!session || !review || sending || !assetsReady) return;
     const owner = session;
     setSending(true);
@@ -703,17 +705,33 @@ export function useComposer(workspace: Workspace, editing?: PostDetail) {
           )
         : await submitPublication(owner.workspace, submission);
       owner.lastSubmission = hash;
-      message(
-        owner,
+      const acceptedMessage =
         receipt.state === 'preparing'
           ? 'حُفظ المنشور؛ لم يثبت عمل النشر بعد. ستعيد Cloudflare المحاولة تلقائيًا.'
           : owner.draft.editingPost
             ? 'تم حفظ التعديل بعد المراجعة.'
             : receipt.state === 'scheduled'
               ? 'تمت جدولة المنشور في Cloudflare.'
-              : 'تم إرسال المنشور. ستتابع الخدمة نتائج المنصات.',
+              : 'تم إرسال المنشور. ستتابع الخدمة نتائج المنصات.';
+      // The accepted publication keeps its durable draft and confirmed plan;
+      // a fresh composer lets the user continue without resubmitting it.
+      owner.draft = newDraft(owner.workspace, owner.caps);
+      owner.jobs = new Map();
+      owner.localSchedule = localTime(
+        defaultSchedule(owner.draft.createdAt),
+        owner.workspace.timeZone,
       );
-      if (current.current === owner) setReview(null);
+      owner.message = '';
+      owner.lastSubmission = undefined;
+      persist(owner);
+      repaint(owner);
+      if (current.current === owner) {
+        setReview(null);
+        return {
+          heading: receipt.state === 'scheduled' ? 'تمت جدولة المنشور' : 'تم استلام المنشور',
+          message: acceptedMessage,
+        };
+      }
     } catch (error) {
       message(owner, errorMessage(error));
     } finally {

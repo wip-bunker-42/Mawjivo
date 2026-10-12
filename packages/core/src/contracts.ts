@@ -220,6 +220,7 @@ export interface TargetReceipt {
   parts?: { partIndex: number; state: PublicationState; remoteId?: string }[];
 }
 export interface PublicationReceipt {
+  preview?: string;
   postId: string;
   workspaceId: string;
   revision: number;
@@ -233,6 +234,10 @@ export interface PostPage {
   nextCursor: string | null;
 }
 export interface Summary {
+  receivedPosts?: number;
+  processingPosts?: number;
+  items?: PublicationReceipt[];
+  hasMore?: boolean;
   localDate: string;
   timeZone: string;
   completePosts: number;

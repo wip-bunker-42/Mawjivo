@@ -102,13 +102,23 @@ async function recoverProgress(now: number, env: Env): Promise<boolean> {
 }
 async function notifyOutcomes(now: number, env: Env): Promise<void> {
   const rows = await env.DB.prepare(
-    "SELECT t.post_id,t.revision,t.workspace_id FROM targets t WHERE t.state IN ('failed','uncertain') AND NOT EXISTS(SELECT 1 FROM report_outbox r WHERE r.workspace_id=t.workspace_id AND r.dedupe_key='target:'||t.post_id||':'||t.revision||':'||t.channel_id||':'||t.state||':'||COALESCE(json_extract(t.error_json,'$.code'),'PROVIDER_FAILED')) GROUP BY t.post_id,t.revision,t.workspace_id LIMIT 20",
-  ).all<{ post_id: string; revision: number; workspace_id: string }>();
+    "SELECT t.post_id,t.revision,t.workspace_id,p.plan_json FROM targets t JOIN post_revisions p ON p.post_id=t.post_id AND p.revision=t.revision WHERE t.state IN ('failed','uncertain') AND NOT EXISTS(SELECT 1 FROM report_outbox r WHERE r.workspace_id=t.workspace_id AND r.dedupe_key='target:'||t.post_id||':'||t.revision||':'||t.channel_id||':'||t.state||':'||COALESCE(json_extract(t.error_json,'$.code'),'PROVIDER_FAILED')) GROUP BY t.post_id,t.revision,t.workspace_id LIMIT 20",
+  ).all<{ post_id: string; revision: number; workspace_id: string; plan_json: string }>();
   for (const row of rows.results) {
     const receipt = await getPublicationReceipt(systemAuth, row.post_id, env, row.revision);
     for (const target of receipt.targets)
       if (['failed', 'uncertain'].includes(target.state))
-        await sendReport(failureReport(row.workspace_id, row.post_id, row.revision, target), env);
+        await sendReport(
+          failureReport(
+            row.workspace_id,
+            row.post_id,
+            row.revision,
+            target,
+            JSON.parse(row.plan_json).targets[0]?.title ||
+              JSON.parse(row.plan_json).targets[0]?.text,
+          ),
+          env,
+        );
   }
   const recoveries = await env.DB.prepare(
     "SELECT t.post_id,t.revision,t.workspace_id,t.channel_id,c.platform FROM targets t JOIN channels c ON c.id=t.channel_id WHERE t.state='published' AND EXISTS(SELECT 1 FROM report_outbox r WHERE r.workspace_id=t.workspace_id AND r.kind='failure' AND substr(r.dedupe_key,1,length('target:'||t.post_id||':'||t.revision||':'||t.channel_id||':'))='target:'||t.post_id||':'||t.revision||':'||t.channel_id||':') AND NOT EXISTS(SELECT 1 FROM report_outbox r WHERE r.workspace_id=t.workspace_id AND r.dedupe_key='recovery:'||t.post_id||':'||t.revision||':'||t.channel_id) LIMIT 20",

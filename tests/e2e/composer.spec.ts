@@ -26,7 +26,11 @@ test('defaults_can_be_changed_and_schedule_starts_ten_hours_from_page_creation',
   const created = Date.now();
   await page.getByRole('checkbox', { name: 'جدولة النشر' }).check();
   const local = await page.getByLabel('وقت النشر').inputValue();
-  expect(Math.abs(Date.parse(local + '+03:00') - created - 36000000)).toBeLessThan(90000);
+  const [day, time] = local.split(' '),
+    [d, m, y] = day!.split('/');
+  expect(Math.abs(Date.parse(`${y}-${m}-${d}T${time}+03:00`) - created - 36000000)).toBeLessThan(
+    90000,
+  );
   await page.getByRole('checkbox', { name: 'جدولة النشر' }).uncheck();
   await expect(page.getByLabel('وقت النشر')).toHaveCount(0);
 });

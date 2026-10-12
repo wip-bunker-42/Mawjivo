@@ -9,7 +9,7 @@ test('a_restored_unscheduled_draft_defaults_to_ten_hours_after_reopening', async
   await page.goto('/');
   await expect(page.getByLabel('النص أو الوصف', { exact: true })).toHaveValue('مسودة محفوظة');
   await page.getByRole('checkbox', { name: 'جدولة النشر' }).check();
-  await expect(page.getByLabel('وقت النشر')).toHaveValue('2026-10-11T22:23:37.123');
+  await expect(page.getByLabel('وقت النشر')).toHaveValue('11/10/2026 22:23:37.123');
 });
 
 async function runWorkerContract(captured: unknown): Promise<void> {
@@ -83,7 +83,17 @@ test('full_flow_preserves_confirmed_content_across_restart', async ({ page }) =>
           call.args.method === 'POST' &&
           call.args.path.endsWith('/posts'),
       ).args.body,
-      draft: [...api.drafts.values()][0] as any,
+      draft: api.calls.findLast(
+        (call: any) =>
+          call.command === 'save_draft' &&
+          call.args.draft.id ===
+            api.calls.find(
+              (c: any) =>
+                c.command === 'service_request' &&
+                c.args.method === 'POST' &&
+                c.args.path.endsWith('/posts'),
+            ).args.body.plan.draftId,
+      ).args.draft,
       originalUploads: api.calls.filter(
         (call: any) => call.command === 'start_upload' && call.args.input.recipeId === null,
       ).length,

@@ -168,6 +168,7 @@ export function failureReport(
   postId: string,
   revision: number,
   target: TargetReceipt,
+  preview?: string,
 ): ReportMessage {
   const names = {
     facebook: 'Facebook',
@@ -182,6 +183,6 @@ export function failureReport(
     workspaceId,
     dedupeKey: `target:${postId}:${revision}:${target.channelId}:${target.state}:${target.error?.code ?? 'PROVIDER_FAILED'}`,
     kind: 'failure',
-    textAr: `Mawjivo — ${names[target.platform]}\nالمنشور: ${postId}\nالخطوة: ${target.state === 'uncertain' ? 'تأكيد نتيجة الإرسال' : 'النشر'}.\n${reason}\nافتح «المجدولة» ثم تفاصيل المنشور لفحص الحساب وإصلاح الربط. الوجهات الناجحة محفوظة.`,
+    textAr: `Mawjivo — ${names[target.platform]}\nالمنشور: ${preview ? [...preview].slice(0, 120).join('') : postId}\nالخطوة: ${target.state === 'uncertain' ? 'تأكيد نتيجة الإرسال' : 'النشر'}.\n${reason}\nافتح «ملخص» لقراءة حالة كل منصة ورابط المنشور. ${target.state === 'uncertain' ? 'تحقق من الحساب قبل إعادة الإرسال لتجنب التكرار.' : 'يمكن إصلاح الوجهة التي فشلت من تفاصيل المنشور في «المجدولة». '}الوجهات الناجحة محفوظة.`,
   };
 }

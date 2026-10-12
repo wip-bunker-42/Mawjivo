@@ -90,6 +90,56 @@ test('timeout_after_a_write_is_uncertain_and_is_never_retried', async () => {
   expect(result[0]!.kind).toBe('uncertain');
   expect(fetch).toHaveBeenCalledTimes(1);
 });
+
+test('a_slow_video_batch_keeps_its_accepted_ids_without_republishing', async () => {
+  vi.useFakeTimers();
+  const timeout = vi.spyOn(AbortSignal, 'timeout').mockImplementation((ms) => {
+    const controller = new AbortController();
+    setTimeout(() => controller.abort(new DOMException('timeout', 'TimeoutError')), ms);
+    return controller.signal;
+  });
+  const fetcher = vi.spyOn(globalThis, 'fetch').mockImplementation(
+    async (_input, init) =>
+      new Promise<Response>((resolve, reject) => {
+        init!.signal!.addEventListener('abort', () => reject(init!.signal!.reason), { once: true });
+        setTimeout(
+          () =>
+            resolve(
+              Response.json({
+                data: {
+                  p0: {
+                    __typename: 'PostActionSuccess',
+                    post: { id: 'slow-video', status: 'sending' },
+                  },
+                },
+              }),
+            ),
+          35000,
+        );
+      }),
+  );
+  try {
+    const t = video(await target('x'));
+    const pending = publishBatch(bufferConnection, [t], testEnv());
+    await vi.waitFor(() => expect(fetcher).toHaveBeenCalledTimes(1));
+    await vi.advanceTimersByTimeAsync(35000);
+    expect(await pending).toMatchObject([{ kind: 'accepted', remoteId: 'slow-video' }]);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  } finally {
+    timeout.mockRestore();
+    vi.useRealTimers();
+  }
+});
+
+test('youtube_video_creation_includes_the_required_category', async () => {
+  const calls = capture({
+    data: {
+      p0: { __typename: 'PostActionSuccess', post: { id: 'youtube-video', status: 'sending' } },
+    },
+  });
+  await publishBatch(bufferConnection, [video(await target('youtube'))], testEnv());
+  expect(Object.values(calls[0]!.variables)[0].metadata.youtube.categoryId).toBe('22');
+});
 test('threads_include_the_first_post_and_ordered_image_alt_text', async () => {
   const t = images(await target('threads'));
   t.threadParts = ['الأول', 'الثاني', 'الثالث'];

@@ -7,14 +7,17 @@ import { MediaPicker } from './MediaPicker';
 import { PlatformFields } from './PlatformFields';
 import { ReviewPage } from './ReviewPage';
 import { SavedDrafts } from './SavedDrafts';
+import { DateTextInput } from '../../components/DateTextInput';
 export function ComposerPage({
   workspace,
   editing,
   onReset,
+  onAccepted,
 }: {
   workspace: Workspace;
   editing?: PostDetail | undefined;
   onReset?: () => void;
+  onAccepted?: (notice: { heading: string; message: string }) => void;
 }): ReactElement {
   const composer = useComposer(workspace, editing),
     reviewButton = useRef<HTMLButtonElement>(null),
@@ -144,20 +147,16 @@ export function ComposerPage({
             </label>
             {draft.scheduleLocal !== null && (
               <>
-                <div className="form-field">
-                  <label htmlFor="schedule-time">وقت النشر</label>
-                  <input
-                    id="schedule-time"
-                    type="datetime-local"
-                    step="0.001"
-                    required
-                    value={draft.scheduleLocal}
-                    onChange={(e) => composer.scheduleTime(e.target.value)}
-                  />
-                  <p>
-                    المنطقة الزمنية: <bdi>{workspace.timeZone}</bdi>
-                  </p>
-                </div>
+                <DateTextInput
+                  id="schedule-time"
+                  label="وقت النشر"
+                  withTime
+                  value={draft.scheduleLocal}
+                  onChange={composer.scheduleTime}
+                />
+                <p>
+                  المنطقة الزمنية: <bdi>{workspace.timeZone}</bdi>
+                </p>
                 {ambiguous?.kind === 'ambiguous' && (
                   <div className="form-field">
                     <label htmlFor="schedule-offset">إزاحة الوقت للموعد المتكرر</label>
@@ -214,7 +213,11 @@ export function ComposerPage({
           sending={composer.sending}
           message={composer.message}
           onClose={closeReview}
-          onConfirm={() => void composer.confirm()}
+          onConfirm={() =>
+            void composer.confirm().then((notice) => {
+              if (notice) onAccepted?.(notice);
+            })
+          }
         />
       )}
     </section>

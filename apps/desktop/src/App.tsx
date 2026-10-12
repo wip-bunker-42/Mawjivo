@@ -54,6 +54,16 @@ export function App(): ReactElement {
   }, []);
   const [page, setPage] = useState<PageId>('compose');
   const [editing, setEditing] = useState<PostDetail | null>(null);
+  const [publicationNotice, setPublicationNotice] = useState<{
+    workspaceId: string;
+    heading: string;
+    message: string;
+  } | null>(null);
+  useEffect(() => {
+    if (!publicationNotice) return;
+    const timer = setTimeout(() => setPublicationNotice(null), 30000);
+    return () => clearTimeout(timer);
+  }, [publicationNotice]);
   const [profiles, setProfiles] = useState<ServiceProfile[]>([]),
     [workspaces, setWorkspaces] = useState<Workspace[]>([]),
     [workspaceId, setWorkspaceId] = useState('');
@@ -221,6 +231,10 @@ export function App(): ReactElement {
             workspace={workspace}
             editing={editing ?? undefined}
             onReset={() => setEditing(null)}
+            onAccepted={(notice) => {
+              setPublicationNotice({ ...notice, workspaceId: workspace.id });
+              setEditing(null);
+            }}
           />
         ) : page === 'scheduled' && workspace ? (
           <ScheduledPage
@@ -246,6 +260,14 @@ export function App(): ReactElement {
             </button>
           </section>
         )}
+        {publicationNotice?.workspaceId === workspaceId && (
+          <section aria-labelledby="publication-notice-heading">
+            <h2 id="publication-notice-heading">{publicationNotice.heading}</h2>
+          </section>
+        )}
+        <p role="status" aria-atomic="true">
+          {publicationNotice?.workspaceId === workspaceId ? publicationNotice.message : ''}
+        </p>
       </main>
     </div>
   );

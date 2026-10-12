@@ -11,6 +11,23 @@ beforeEach(async () => {
 });
 afterEach(() => vi.useRealTimers());
 
+test('summary_includes_received_posts_and_named_targets_before_publication_finishes', async () => {
+  const fixture = await publicationFixture(true);
+  const receipt = await submitPost(
+    auth,
+    await fixture.submission({ text: 'منشور قيد المتابعة' }),
+    fixture.env,
+  );
+  const summary = await getSummary(auth, 'workspace-a', '2026-10-11', fixture.env);
+  expect(summary).toMatchObject({
+    receivedPosts: 1,
+    processingPosts: 1,
+    items: [{ postId: receipt.postId, preview: 'منشور قيد المتابعة' }],
+  });
+  expect(summary.items![0]!.targets).toHaveLength(2);
+  expect((await getSummary(auth, 'workspace-b', '2026-10-11', fixture.env)).items).toEqual([]);
+});
+
 test('a_known_rejection_can_be_retried_after_repair_without_resending_successful_targets', async () => {
   const fixture = await publicationFixture(true),
     receipt = await submitPost(auth, await fixture.submission(), fixture.env);

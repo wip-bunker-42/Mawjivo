@@ -22,6 +22,7 @@ export async function listPosts(
   filter: 'all' | 'scheduled' | 'needsAction',
   cursor: string | undefined,
   env: Env,
+  range?: { start: number; end: number },
 ): Promise<PostPage> {
   await getWorkspace(auth, workspaceId, env);
   if (!['all', 'scheduled', 'needsAction'].includes(filter))
@@ -58,14 +59,18 @@ export async function listPosts(
         : '';
   const items = (
     await env.DB.prepare(
-      'SELECT p.id,p.workspace_id,p.revision,p.state,p.due_at_ms,p.created_at_ms FROM posts p WHERE p.workspace_id=?' +
+      'SELECT p.id,p.workspace_id,p.revision,p.state,p.due_at_ms,p.created_at_ms,p.plan_json FROM posts p WHERE p.workspace_id=?' +
         conditions +
+        (range
+          ? ' AND (p.created_at_ms>=? AND p.created_at_ms<? OR p.updated_at_ms>=? AND p.updated_at_ms<? OR EXISTS(SELECT 1 FROM targets a WHERE a.post_id=p.id AND a.revision=p.revision AND a.updated_at_ms>=? AND a.updated_at_ms<?))'
+          : '') +
         (boundary ? ' AND (p.created_at_ms<? OR (p.created_at_ms=? AND p.id<?))' : '') +
         ' ORDER BY p.created_at_ms DESC,p.id DESC LIMIT 21',
     )
       .bind(
         workspaceId,
         ...(filter === 'scheduled' ? [Date.now()] : []),
+        ...(range ? [range.start, range.end, range.start, range.end, range.start, range.end] : []),
         ...(boundary ? [boundary.t, boundary.t, boundary.id] : []),
       )
       .all<{
@@ -75,6 +80,7 @@ export async function listPosts(
         state: PublicationState;
         due_at_ms: number | null;
         created_at_ms: number;
+        plan_json: string;
       }>()
   ).results;
   const page = items.slice(0, 20),
@@ -128,6 +134,13 @@ export async function listPosts(
   }
   return {
     items: page.map((post) => ({
+      preview: [
+        ...((JSON.parse(post.plan_json).targets[0]?.title ||
+          JSON.parse(post.plan_json).targets[0]?.text ||
+          'منشور بلا نص') as string),
+      ]
+        .slice(0, 120)
+        .join(''),
       postId: post.id,
       workspaceId: post.workspace_id,
       revision: post.revision,
@@ -162,23 +175,32 @@ export async function getSummary(
   }
   const counts = await env.DB.prepare(
     `WITH day(start_ms,end_ms) AS (VALUES(?,?)),
-    logical AS (SELECT p.id,COUNT(t.channel_id) AS total,
+    logical AS (SELECT p.id,p.created_at_ms,p.due_at_ms,COUNT(t.channel_id) AS total,
+      SUM(t.state IN ('preparing','ready','sending','accepted')) AS processing,
       SUM(t.state='published') AS published,SUM(t.state='uncertain') AS unknown,SUM(t.state='failed') AS failed,
       SUM(t.state='published' AND COALESCE(t.published_at_ms,t.updated_at_ms)>=day.start_ms AND COALESCE(t.published_at_ms,t.updated_at_ms)<day.end_ms) AS today,
       MAX(CASE WHEN t.state='published' THEN COALESCE(t.published_at_ms,t.updated_at_ms) END) AS completed_at,
       MAX(p.updated_at_ms,COALESCE(MAX(t.updated_at_ms),0)) AS activity_at
       FROM posts p JOIN targets t ON t.post_id=p.id AND t.revision=p.revision CROSS JOIN day WHERE p.workspace_id=? GROUP BY p.id)
-    SELECT COALESCE(SUM(total=published AND completed_at>=day.start_ms AND completed_at<day.end_ms),0) AS completePosts,
+    SELECT COALESCE(SUM(created_at_ms>=day.start_ms AND created_at_ms<day.end_ms),0) AS receivedPosts,
+      COALESCE(SUM(processing>0 AND (due_at_ms IS NULL OR due_at_ms<=?) AND activity_at>=day.start_ms AND activity_at<day.end_ms),0) AS processingPosts,
+      COALESCE(SUM(total=published AND completed_at>=day.start_ms AND completed_at<day.end_ms),0) AS completePosts,
       COALESCE(SUM(published<total AND unknown=0 AND published>0 AND activity_at>=day.start_ms AND activity_at<day.end_ms),0) AS partialPosts,
       COALESCE(SUM(unknown=0 AND published=0 AND failed>0 AND activity_at>=day.start_ms AND activity_at<day.end_ms),0) AS failedPosts,
       COALESCE(SUM(published<total AND unknown>0 AND activity_at>=day.start_ms AND activity_at<day.end_ms),0) AS unknownPosts,
       COALESCE(SUM(today),0) AS publishedTargets FROM logical CROSS JOIN day`,
   )
-    .bind(start, end, workspaceId)
+    .bind(start, end, workspaceId, Date.now())
     .first<
       Pick<
         Summary,
-        'completePosts' | 'partialPosts' | 'failedPosts' | 'unknownPosts' | 'publishedTargets'
+        | 'completePosts'
+        | 'partialPosts'
+        | 'failedPosts'
+        | 'unknownPosts'
+        | 'publishedTargets'
+        | 'receivedPosts'
+        | 'processingPosts'
       >
     >();
   const result: Summary = {
@@ -198,6 +220,9 @@ export async function getSummary(
     .bind(workspaceId, Date.now())
     .first<{ count: number }>();
   result.upcomingScheduled = future?.count ?? 0;
+  const page = await listPosts(auth, workspaceId, 'all', undefined, env, { start, end });
+  result.items = page.items;
+  result.hasMore = page.nextCursor !== null;
   return result;
 }
 export async function getPostDetail(
