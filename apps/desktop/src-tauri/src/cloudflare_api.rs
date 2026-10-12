@@ -16,6 +16,19 @@ pub struct CloudflareClient {
     token: Zeroizing<String>,
     artifact: ServiceArtifact,
 }
+pub fn database_owner_payload(service_id: &str) -> Result<Value, AppError> {
+    if service_id.len() != 32 || !service_id.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        return Err(AppError::new(
+            "SERVICE_ID_INVALID",
+            "معرف ملكية الخدمة غير صالح.",
+        ));
+    }
+    // D1 accepts a SQL script only when params is empty. The identifier is locally
+    // generated and strictly hex-validated before embedding it in this script.
+    Ok(
+        json!({"sql":format!("CREATE TABLE mawjivo_owner(singleton INTEGER PRIMARY KEY CHECK(singleton=1),service_id TEXT NOT NULL);INSERT INTO mawjivo_owner(singleton,service_id) VALUES(1,'{service_id}');"),"params":[]}),
+    )
+}
 pub fn validate_service_version(remote: &str, package: &str) -> Result<(), AppError> {
     let invalid = || {
         AppError::new(
@@ -74,11 +87,25 @@ fn invalid_response() -> AppError {
     )
 }
 pub fn client() -> Result<Client, AppError> {
-    Client::builder()
+    let builder = Client::builder()
         .timeout(Duration::from_secs(35))
         .connect_timeout(Duration::from_secs(10))
         .redirect(reqwest::redirect::Policy::none())
-        .user_agent("Mawjivo/0.1.0")
+        .user_agent("Mawjivo/0.1.0");
+    #[cfg(feature = "operator-tools")]
+    let builder = match (
+        std::env::var("MAWJIVO_OPERATOR_RESOLVE_DOMAIN"),
+        std::env::var("MAWJIVO_OPERATOR_RESOLVE_IP"),
+    ) {
+        (Ok(domain), Ok(ip)) => {
+            let address: std::net::IpAddr = ip
+                .parse()
+                .map_err(|_| AppError::new("OPERATOR_RESOLVE", "عنوان فحص الشبكة غير صالح."))?;
+            builder.resolve(&domain, std::net::SocketAddr::new(address, 0))
+        }
+        _ => builder,
+    };
+    builder
         .build()
         .map_err(|_| AppError::new("NETWORK", "تعذر إنشاء اتصال آمن."))
 }
@@ -276,7 +303,23 @@ impl CloudflareClient {
     }
     async fn json_response(&self, response: Response) -> Result<Value, AppError> {
         if !response.status().is_success() {
-            return Err(api_error(response.status().as_u16()));
+            let status = response.status().as_u16();
+            #[cfg(feature = "operator-tools")]
+            if std::env::var("MAWJIVO_OPERATOR_DIAGNOSTICS").as_deref() == Ok("true") {
+                let endpoint = response.url().path().to_owned();
+                let body = bounded_body(response, 65_536).await?;
+                let parsed: Value = serde_json::from_slice(&body).unwrap_or(Value::Null);
+                let codes: Vec<u64> = parsed["errors"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|item| item["code"].as_u64())
+                    .collect();
+                eprintln!(
+                    "Cloudflare diagnostic: endpoint={endpoint} status={status} codes={codes:?}"
+                );
+            }
+            return Err(api_error(status));
         }
         let envelope: Value = serde_json::from_slice(&bounded_body(response, 4_194_304).await?)
             .map_err(|_| invalid_response())?;
@@ -543,7 +586,12 @@ impl ProvisionApi for CloudflareClient {
             )
             .await?;
         let id = database["uuid"].as_str().ok_or_else(invalid_response)?;
-        self.query(id,"CREATE TABLE mawjivo_owner(singleton INTEGER PRIMARY KEY CHECK(singleton=1),service_id TEXT NOT NULL);INSERT INTO mawjivo_owner(singleton,service_id) VALUES(1,?);",vec![self.service_id.clone()]).await?;
+        self.call(
+            Method::POST,
+            &self.account_path(&format!("/d1/database/{id}/query")),
+            Some(database_owner_payload(&self.service_id)?),
+        )
+        .await?;
         Ok(id.into())
     }
     async fn bucket(&self, name: &str, _known: bool) -> Result<(), AppError> {

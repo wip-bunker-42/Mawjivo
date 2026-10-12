@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "tsc && vite build",
-    "typecheck": "tsc"
+    "typecheck": "tsc",
+    "test:serve": "pnpm build && vite preview --host 127.0.0.1 --port 1420"
   },
   "dependencies": {
     "@js-temporal/polyfill": "0.5.1",

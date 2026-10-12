@@ -6,6 +6,27 @@ use mawjivo_lib::{
     vault::Vault,
 };
 use std::{collections::HashMap, sync::Mutex};
+#[test]
+fn database_ownership_script_is_valid_without_d1_multi_statement_parameters() {
+    let service = "de19f04f6457408eb1c6d47aa32428f2";
+    let payload = mawjivo_lib::cloudflare_api::database_owner_payload(service).unwrap();
+    assert!(payload["params"].as_array().unwrap().is_empty());
+    let db = rusqlite::Connection::open_in_memory().unwrap();
+    db.execute_batch(payload["sql"].as_str().unwrap()).unwrap();
+    let actual: String = db
+        .query_row(
+            "SELECT service_id FROM mawjivo_owner WHERE singleton=1",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(actual, service);
+    assert!(
+        mawjivo_lib::cloudflare_api::database_owner_payload("a');DROP TABLE mawjivo_owner;--")
+            .is_err()
+    );
+    assert!(mawjivo_lib::cloudflare_api::database_owner_payload("").is_err());
+}
 #[derive(Default)]
 struct TestVault(Mutex<HashMap<String, String>>);
 impl Vault for TestVault {

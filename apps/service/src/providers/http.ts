@@ -7,7 +7,7 @@ export async function providerJson<T>(url: string, token: string, body?: unknown
       method: body === undefined ? 'GET' : 'POST',
       headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-      redirect: 'error',
+      redirect: 'manual',
       signal: AbortSignal.timeout(20_000),
     });
   } catch {

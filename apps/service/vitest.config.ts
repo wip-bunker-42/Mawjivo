@@ -1,7 +1,14 @@
 import { cloudflareTest, readD1Migrations } from '@cloudflare/vitest-plugin';
 import { defineConfig } from 'vitest/config';
 export default defineConfig(async () => ({
-  test: { provide: { migrations: await readD1Migrations('./migrations') } },
+  test: {
+    provide: {
+      migrations: await readD1Migrations('./migrations'),
+      fullFlow: process.env.MAWJIVO_FULL_FLOW_INPUT_JSON
+        ? JSON.parse(process.env.MAWJIVO_FULL_FLOW_INPUT_JSON)
+        : null,
+    },
+  },
   plugins: [
     cloudflareTest({
       wrangler: { configPath: './wrangler.jsonc' },

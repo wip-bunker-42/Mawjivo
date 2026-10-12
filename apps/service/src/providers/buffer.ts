@@ -355,7 +355,7 @@ async function exchange<T = NonNullable<BufferPayload['data']>>(
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ query, variables }),
-      redirect: 'error',
+      redirect: 'manual',
       signal: AbortSignal.timeout(25000),
     });
   } catch {
@@ -497,7 +497,7 @@ export async function publishBatch(
         else if (!reply.response.ok) {
           const status = reply.response.status;
           result =
-            status >= 500 || status === 408
+            (status >= 300 && status < 400) || status >= 500 || status === 408
               ? {
                   kind: 'uncertain',
                   channelId: t.channelId,

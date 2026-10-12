@@ -24,7 +24,7 @@ async function ping(base: string | undefined, suffix = ''): Promise<boolean> {
   try {
     const response = await fetch(base + suffix, {
       method: 'POST',
-      redirect: 'error',
+      redirect: 'manual',
       signal: AbortSignal.timeout(10000),
     });
     await response.body?.cancel();

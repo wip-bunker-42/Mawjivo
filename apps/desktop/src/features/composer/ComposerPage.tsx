@@ -147,6 +147,7 @@ export function ComposerPage({
                   <input
                     id="schedule-time"
                     type="datetime-local"
+                    step="0.001"
                     required
                     value={draft.scheduleLocal}
                     onChange={(e) => composer.scheduleTime(e.target.value)}

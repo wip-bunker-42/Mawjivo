@@ -236,7 +236,7 @@ async function metaRequest(
         ...(form ? { 'Content-Type': 'application/x-www-form-urlencoded' } : {}),
       },
       ...(form ? { body: new URLSearchParams(form).toString() } : {}),
-      redirect: 'error',
+      redirect: 'manual',
       signal: AbortSignal.timeout(25000),
     });
   } catch {
@@ -261,7 +261,10 @@ async function metaRequest(
       response.status === 401 || response.status === 403 || [10, 190, 200].includes(code ?? -1);
     const ambiguous =
       Boolean(form) &&
-      (response.status >= 500 || response.status === 408 || body.error?.is_transient === true);
+      ((response.status >= 300 && response.status < 400) ||
+        response.status >= 500 ||
+        response.status === 408 ||
+        body.error?.is_transient === true);
     throw new MetaFailure(
       ambiguous,
       providerError(

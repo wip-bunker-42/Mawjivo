@@ -118,7 +118,7 @@ export async function sendReport(report: ReportMessage, env: Env): Promise<Repor
       'https://api.telegram.org/bot' + config.botToken + '/sendMessage',
       {
         method: 'POST',
-        redirect: 'error',
+        redirect: 'manual',
         signal: AbortSignal.timeout(20000),
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -128,7 +128,7 @@ export async function sendReport(report: ReportMessage, env: Env): Promise<Repor
         }),
       },
     );
-    if (response.status >= 500) {
+    if ((response.status >= 300 && response.status < 400) || response.status >= 500) {
       await response.body?.cancel();
       throw new Error('AMBIGUOUS');
     }

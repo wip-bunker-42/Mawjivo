@@ -73,7 +73,7 @@ function localTime(instant: string, zone: string): string {
   return Temporal.Instant.from(instant)
     .toZonedDateTimeISO(zone)
     .toPlainDateTime()
-    .toString({ smallestUnit: 'minute' });
+    .toString({ smallestUnit: 'millisecond' });
 }
 function defaults(workspace: Workspace, caps: CapabilitySnapshot): string[] {
   return workspace.defaultPlatforms.flatMap((platform) => {
