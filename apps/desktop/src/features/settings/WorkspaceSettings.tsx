@@ -191,7 +191,7 @@ export function WorkspaceSettings({
                       setPreferred(updated);
                     }}
                   >
-                    <option value="">اختيار حساب جاهز (Meta أولًا)</option>
+                    <option value="">اختيار تلقائي لحساب جاهز</option>
                     {caps?.channels
                       .filter((channel) => channel.platform === platform)
                       .map((channel) => (
