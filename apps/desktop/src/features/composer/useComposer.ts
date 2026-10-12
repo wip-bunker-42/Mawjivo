@@ -724,6 +724,7 @@ export function useComposer(workspace: Workspace, editing?: PostDetail) {
       owner.message = '';
       owner.lastSubmission = undefined;
       persist(owner);
+      await owner.persist;
       repaint(owner);
       if (current.current === owner) {
         setReview(null);

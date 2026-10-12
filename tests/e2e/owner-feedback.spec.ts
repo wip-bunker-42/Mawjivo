@@ -1,6 +1,31 @@
 import { test, expect } from '@playwright/test';
 import { composerFixture } from './composer-fixture';
 
+test('accepted_edit_waits_for_fresh_draft_storage_before_remounting_the_composer', async ({
+  page,
+}) => {
+  await composerFixture(page, { history: true });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'المجدولة', exact: true }).click();
+  await page.getByRole('button', { name: 'تفاصيل المنشور scheduled-post' }).click();
+  await page.getByRole('button', { name: 'تعديل المنشور', exact: true }).click();
+  await page.getByLabel('النص أو الوصف', { exact: true }).fill('تعديل وافقت عليه');
+  await page.getByRole('button', { name: 'مراجعة النشر' }).click();
+  await page.evaluate(() => {
+    const api = (globalThis as any).__TAURI_INTERNALS__,
+      original = api.invoke;
+    api.invoke = async (command: string, args: any) => {
+      if (command === 'save_draft' && args.draft.text === '')
+        await new Promise((resolve) => setTimeout(resolve, 700));
+      return original(command, args);
+    };
+  });
+  await page.getByRole('button', { name: 'موافق، انشر' }).click();
+  await expect(page.getByRole('heading', { level: 2, name: 'تمت جدولة المنشور' })).toBeVisible();
+  await expect(page.getByLabel('النص أو الوصف', { exact: true })).toHaveValue('');
+  await expect(page.getByRole('heading', { name: 'تفاصيل المنشور', exact: true })).toBeVisible();
+});
+
 test('schedule_accepts_a_date_and_time_typed_character_by_character', async ({ page }) => {
   await page.clock.setFixedTime(new Date('2026-10-12T09:00:00Z'));
   await composerFixture(page);
