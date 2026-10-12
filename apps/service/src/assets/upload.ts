@@ -267,19 +267,20 @@ export async function completeUpload(
   }
   if (!object) {
     try {
-      object = await env.MEDIA.resumeMultipartUpload(row.object_key, row.multipart_id!).complete(
-        valid,
-      );
+      await env.MEDIA.resumeMultipartUpload(row.object_key, row.multipart_id!).complete(valid);
     } catch {
-      object = await env.MEDIA.head(row.object_key);
-      if (!object)
-        throw new ServiceError(
-          'UPLOAD_FINALIZING',
-          'لم يُحسم إكمال الرفع؛ أعد الفحص دون رفع الملف من البداية.',
-          503,
-          true,
-        );
+      // A lost completion reply is reconciled by the authoritative HEAD below.
     }
+    // Production R2's complete response omits HTTP/custom metadata. HEAD returns
+    // the stored size, type and identity, including after a lost completion reply.
+    object = await env.MEDIA.head(row.object_key);
+    if (!object)
+      throw new ServiceError(
+        'UPLOAD_FINALIZING',
+        'لم يُحسم إكمال الرفع؛ أعد الفحص دون رفع الملف من البداية.',
+        503,
+        true,
+      );
   }
   if (
     object.size !== row.bytes ||

@@ -281,3 +281,88 @@ test('failed_abort_cannot_release_capacity_before_confirmed_retry', async () => 
     .first<{ state: string }>();
   expect(released!.state).toBe('released');
 });
+
+test('real_r2_complete_response_without_metadata_is_verified_using_stored_object_head', async () => {
+  const env = testEnv();
+  const ticket = await beginUpload(
+    assetAuth,
+    'workspace-a',
+    { ...manifest(), kind: 'video', mimeType: 'video/mp4' },
+    env,
+  );
+  const row = await env.DB.prepare('SELECT object_key FROM assets WHERE id=?')
+    .bind(ticket.assetId)
+    .first<{ object_key: string }>();
+  const multipart = env.MEDIA.resumeMultipartUpload(row!.object_key, ticket.multipartId!);
+  const part = await multipart.uploadPart(1, new Uint8Array(10));
+  const original = env.MEDIA.resumeMultipartUpload.bind(env.MEDIA);
+  const resume = vi.spyOn(env.MEDIA, 'resumeMultipartUpload').mockImplementation((key, id) => {
+    const upload = original(key, id);
+    return {
+      key,
+      uploadId: id,
+      uploadPart: upload.uploadPart.bind(upload),
+      abort: upload.abort.bind(upload),
+      complete: async (parts) => {
+        const result = await upload.complete(parts);
+        // Production R2 completes with empty metadata, although HEAD retains it.
+        return {
+          ...result,
+          size: result.size,
+          httpMetadata: {},
+          customMetadata: {},
+          writeHttpMetadata: result.writeHttpMetadata.bind(result),
+        };
+      },
+    };
+  });
+  try {
+    const completed = await completeUpload(assetAuth, ticket.assetId, [part], 'a'.repeat(64), env);
+    expect(completed.bytes).toBe(10);
+    expect(completed.mimeType).toBe('video/mp4');
+    const stored = await env.MEDIA.head(row!.object_key);
+    expect(stored!.customMetadata!.assetId).toBe(ticket.assetId);
+    expect(
+      await env.DB.prepare('SELECT state FROM upload_reservations WHERE asset_id=?')
+        .bind(ticket.assetId)
+        .first('state'),
+    ).toBe('completed');
+  } finally {
+    resume.mockRestore();
+  }
+});
+
+test.each(['contentType', 'assetId'] as const)(
+  'multipart_confirmation_still_rejects_wrong_stored_%s',
+  async (field) => {
+    const env = testEnv();
+    const ticket = await beginUpload(assetAuth, 'workspace-a', manifest(), env);
+    const row = await env.DB.prepare('SELECT object_key FROM assets WHERE id=?')
+      .bind(ticket.assetId)
+      .first<{ object_key: string }>();
+    const upload = env.MEDIA.resumeMultipartUpload(row!.object_key, ticket.multipartId!);
+    const part = await upload.uploadPart(1, new Uint8Array(10));
+    const original = env.MEDIA.head.bind(env.MEDIA);
+    const head = vi.spyOn(env.MEDIA, 'head').mockImplementation(async (key) => {
+      const result = await original(key);
+      if (!result) return null;
+      return {
+        ...result,
+        size: result.size,
+        httpMetadata:
+          field === 'contentType' ? { contentType: 'video/mp4' } : (result.httpMetadata ?? {}),
+        customMetadata:
+          field === 'assetId' ? { assetId: 'foreign-object' } : (result.customMetadata ?? {}),
+        writeHttpMetadata: result.writeHttpMetadata.bind(result),
+      };
+    });
+    try {
+      await expect(
+        completeUpload(assetAuth, ticket.assetId, [part], 'a'.repeat(64), env),
+      ).rejects.toMatchObject({ code: 'UPLOAD_SIZE_MISMATCH' });
+    } finally {
+      head.mockRestore();
+    }
+    expect(await env.MEDIA.head(row!.object_key)).toBeNull();
+  },
+);
