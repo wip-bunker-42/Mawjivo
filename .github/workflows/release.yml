@@ -2,6 +2,11 @@ name: Windows signed update acceptance
 on:
   workflow_dispatch:
     inputs:
+      diagnostics_only:
+        description: 'Replay only: collect real WebView process flags; never signs or publishes'
+        required: false
+        default: false
+        type: boolean
       replay_run:
         description: 'Diagnostic only: reuse installers from this workflow run; never signs or publishes'
         required: false
@@ -182,18 +187,24 @@ jobs:
           $taskDriverVersion = & .tools/edge-driver/msedgedriver.exe --version
           if ($taskDriverVersion -notmatch [regex]::Escape($taskVersion)) { throw 'Edge driver mismatch.' }
       - name: Prove actual install and signed in-app update with Windows vault
+        if: inputs.diagnostics_only != true
         shell: pwsh
         env:
           MAWJIVO_ACCEPTANCE_FIXTURE_URL: ${{ vars.MAWJIVO_ACCEPTANCE_FIXTURE_URL }}
           MAWJIVO_ACCEPTANCE_DIRECT_DRIVER: ${{ inputs.replay_run != '' }}
           MAWJIVO_ACCEPTANCE_ATTACH_DRIVER: 'true'
         run: node scripts/accept-installed-update.mjs .tools/acceptance-base .tools/acceptance-next .tools/tauri-driver/bin/tauri-driver.exe .tools/edge-driver/msedgedriver.exe .tools/installed-acceptance
+      - name: Diagnose the previous real WebView startup failure
+        if: inputs.diagnostics_only == true && inputs.replay_run != ''
+        shell: pwsh
+        run: node scripts/diagnose-windows-session.mjs .tools/acceptance-base .tools/session-diagnostics
       - name: Retain concrete acceptance evidence and installers
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: windows-signed-acceptance
           path: |
+            .tools/session-diagnostics/
             .tools/acceptance-base/
             .tools/acceptance-next/
             .tools/installed-acceptance/acceptance-proof.json
