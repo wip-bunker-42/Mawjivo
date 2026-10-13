@@ -91,7 +91,10 @@ export function createReleaseStore(credentials, options = {}) {
   });
   const signedFetch = options.signedFetch ?? signer.fetch.bind(signer);
   const publicFetch = options.publicFetch ?? fetch;
-  const endpoint = `https://${account}.r2.cloudflarestorage.com/mawjivo-releases/`;
+  const bucket = options.bucket ?? 'mawjivo-releases';
+  if (bucket !== 'mawjivo-releases' && !/^mawjivo-release-test-[a-z0-9-]{1,40}$/.test(bucket))
+    throw new Error('RELEASE_BUCKET_SCOPE');
+  const endpoint = `https://${account}.r2.cloudflarestorage.com/${bucket}/`;
   const location = (key) => endpoint + checkedKey(key).split('/').map(encodeURIComponent).join('/');
   const signed = (url, init = {}) =>
     signedFetch(url, {

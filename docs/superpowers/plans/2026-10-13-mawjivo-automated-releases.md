@@ -80,7 +80,7 @@ await assert.rejects(conditionalWriteConflict, /CONFLICT/);
 - `cleanupReleases(store, nowMs) -> Promise<{deletedKeys, remainingBytes, errors}>`؛ تقرأ الإعلانات والسجل الحاليين، وتستعمل الحذف المجمع وتكتب نتيجة الحذف المؤكدة فقط.
 - `stageRelease(release, store) -> Promise<StagedRelease>` يتحقق من التوقيع ويرفع المفقود ويثبت القراءة العامة دون تفعيل إنتاج. `activateRelease(staged, acceptanceProof, store) -> Promise<PublicationResult>` يتحقق من الدليل والإصدار الحالي وETag، ويسجل التفعيل ثم يشغل التنظيف. تبقى واجهة `publishRelease(release, control)` القديمة wrapper متوافقة مع الاختبارات الحالية.
 
-- [ ] **Step 1 — RED:** أنشئ قائمة أربع نسخ إنتاج، ونسخة اختبار تحمل رقم نسخة إنتاج، وحزمة عمرها أقل من سبعة أيام، وملف `media-tools/sources.zip`، واسمًا يحوي `&amp;`/مسارًا غير مصنف. اختبر:
+- [x] **Step 1 — RED:** أنشئ قائمة أربع نسخ إنتاج، ونسخة اختبار تحمل رقم نسخة إنتاج، وحزمة عمرها أقل من سبعة أيام، وملف `media-tools/sources.zip`، واسمًا يحوي `&amp;`/مسارًا غير مصنف. اختبر:
 
 ```js
 assert.deepEqual(plan.deleteKeys.sort(), eligibleOlderPackageKeys.sort());
@@ -90,10 +90,10 @@ assert.ok(!plan.deleteKeys.some((key) => key.startsWith('media-tools/')));
 
 ثبّت الرفض عند manifest مفقود أو مزور، والسلوك عند حد السبعة أيام بالضبط، وحماية كل ملفات الحزمة، ورفض وسم قديم أو ETag متغير. اختبر أن الحذف الجزئي لا يزيل سجل ملف فشل حذفه، وأن بقايا رفع فاشل لا تصنف إصدارًا مستقرًا.
 
-- [ ] **Step 2:** شغّل `node --test scripts/test/release-retention.test.mjs scripts/test/release-publication.test.mjs`؛ يتوقع الفشل الجديد.
-- [ ] **Step 3 — GREEN:** طبق الفرز بـSemVer ثابت، مع مقارنة النسخة النشطة قبل التفعيل. احم أحدث إصدارين فُعل إعلانهما وتحقق منه، وروابط manifest الاختبار، وكل مجموعة أحدث ملف فيها أصغر من المهلة. تستند قواعد legacy لملفات الاختبار الثلاثة الموجودة إلى prefix واسم مثبت Mawjivo موثق وLastModified، ولا تتوسع إلى ملفات مجهولة. توقف عن الحذف عند نقص دليل الإعلان أو السجل. افحص حد `1_000_000_000` بايت للموجود والجديد المفقود قبل الرفع؛ عند عدم كفايته أوقف النشر برسالة قابلة للإجراء، دون حذف مسبق أو تفعيل ناقص. يتحقق CAS عند تحديث السجل والإعلان، ويسجل فشل التنظيف بعد نشر ناجح دون إعادة الإعلان السابق.
-- [ ] **Step 4:** أعد الاختبارات و`pnpm test:scripts`. شغّل وضع عرض خطة تنظيف قراءة فقط على `mawjivo-releases` الحقيقي، وراجع قائمة الحماية والحذف دون حذف شيء. يختبر S3 bulk delete فعليًا على ملفات اختبار معزولة داخل مخزن اختبار مملوك بعلامة الملكية نفسها، وليس على وسائط المالك أو الإعلانات النشطة.
-- [ ] **Step 5:** احفظ commit: `feat: retain active release packages and clean eligible old downloads`.
+- [x] **Step 2:** شغّل `node --test scripts/test/release-retention.test.mjs scripts/test/release-publication.test.mjs`؛ يتوقع الفشل الجديد.
+- [x] **Step 3 — GREEN:** طبق الفرز بـSemVer ثابت، مع مقارنة النسخة النشطة قبل التفعيل. احم أحدث إصدارين فُعل إعلانهما وتحقق منه، وروابط manifest الاختبار، وكل مجموعة أحدث ملف فيها أصغر من المهلة. تستند قواعد legacy لملفات الاختبار الثلاثة الموجودة إلى prefix واسم مثبت Mawjivo موثق وLastModified، ولا تتوسع إلى ملفات مجهولة. توقف عن الحذف عند نقص دليل الإعلان أو السجل. افحص حد `1_000_000_000` بايت للموجود والجديد المفقود قبل الرفع؛ عند عدم كفايته أوقف النشر برسالة قابلة للإجراء، دون حذف مسبق أو تفعيل ناقص. يتحقق CAS عند تحديث السجل والإعلان، ويسجل فشل التنظيف بعد نشر ناجح دون إعادة الإعلان السابق.
+- [x] **Step 4:** أعد الاختبارات و`pnpm test:scripts`. شغّل وضع عرض خطة تنظيف قراءة فقط على `mawjivo-releases` الحقيقي، وراجع قائمة الحماية والحذف دون حذف شيء. يختبر S3 bulk delete فعليًا على ملفات اختبار معزولة داخل مخزن اختبار مملوك بعلامة الملكية نفسها، وليس على وسائط المالك أو الإعلانات النشطة.
+- [x] **Step 5:** احفظ commit: `feat: retain active release packages and clean eligible old downloads`.
 
 ### Task 3: قبول Windows الحقيقي ومعالجة تعطل WebView
 

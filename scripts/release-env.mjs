@@ -6,7 +6,7 @@ const required = [
   'MAWJIVO_RELEASE_ACCESS_KEY_ID',
   'MAWJIVO_RELEASE_SECRET_KEY',
 ];
-export async function loadReleaseEnv(path) {
+export async function readEnvFields(path) {
   const handle = await open(path, 'r').catch(() => {
     throw new Error('RELEASE_ENV_UNAVAILABLE');
   });
@@ -44,6 +44,10 @@ export async function loadReleaseEnv(path) {
     }
     fields[name] = value;
   }
+  return fields;
+}
+export async function loadReleaseEnv(path) {
+  const fields = await readEnvFields(path);
   const key = fields.MAWJIVO_SIGNING_PRIVATE_KEY || fields.TAURI_SIGNING_PRIVATE_KEY;
   if (
     fields.MAWJIVO_SIGNING_PRIVATE_KEY &&
