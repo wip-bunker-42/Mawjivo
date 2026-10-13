@@ -115,6 +115,17 @@ async fn inspect_with(
     }
     let version = binding("SERVICE_VERSION").ok_or_else(invalid)?;
     validate_service_version(version, env!("CARGO_PKG_VERSION"))?;
+    let resource = |name: &str| {
+        settings["bindings"]
+            .as_array()
+            .and_then(|items| items.iter().find(|item| item["name"] == name))
+    };
+    if resource("DB").and_then(|item| item["id"].as_str()) != state.database_id.as_deref()
+        || resource("MEDIA").and_then(|item| item["bucket_name"].as_str())
+            != Some(format!("{}-media", state.worker_name()).as_str())
+    {
+        return Err(invalid());
+    }
     api.verify_resources(state).await?;
     let host = url.host_str().ok_or_else(invalid)?;
     if host.ends_with(".workers.dev") {

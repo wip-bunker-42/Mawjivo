@@ -124,6 +124,51 @@ pub async fn bounded_body(mut response: Response, max_bytes: usize) -> Result<Ve
     Ok(bytes)
 }
 impl CloudflareClient {
+    #[cfg(feature = "operator-tools")]
+    pub async fn transfer_resource_evidence(
+        &self,
+        state: &ProvisionState,
+        workspace_ids: &[String],
+        connection_ids: &[String],
+    ) -> Result<Value, AppError> {
+        let settings = self
+            .call(
+                Method::GET,
+                &self.account_path(&format!(
+                    "/workers/scripts/{}/settings",
+                    state.worker_name()
+                )),
+                None,
+            )
+            .await?;
+        let binding = |name: &str| {
+            settings["bindings"]
+                .as_array()
+                .and_then(|items| items.iter().find(|item| item["name"] == name))
+        };
+        let database = binding("DB")
+            .and_then(|item| item["id"].as_str())
+            .ok_or_else(invalid_response)?;
+        let bucket = binding("MEDIA")
+            .and_then(|item| item["bucket_name"].as_str())
+            .ok_or_else(invalid_response)?;
+        let workflow = binding("PUBLISH")
+            .and_then(|item| item["workflow_name"].as_str())
+            .ok_or_else(invalid_response)?;
+        if Some(database) != state.database_id.as_deref()
+            || bucket != format!("{}-media", state.worker_name())
+            || workflow != format!("{}-publish", state.worker_name())
+        {
+            return Err(invalid_response());
+        }
+        let posts = self.query(database, "SELECT id,workspace_id,workflow_id FROM posts WHERE workspace_id IN (SELECT value FROM json_each(?)) ORDER BY workspace_id,id", vec![serde_json::to_string(workspace_ids).map_err(|_| invalid_response())?]).await?;
+        let rows = posts[0]["results"]
+            .as_array()
+            .ok_or_else(invalid_response)?;
+        Ok(
+            json!({"serviceId":state.profile.service_id,"databaseId":database,"worker":state.worker_name(),"mediaBucket":bucket,"workflow":workflow,"workspaceIds":workspace_ids,"connectionIds":connection_ids,"postIds":rows}),
+        )
+    }
     pub async fn new(input: &ProvisionInput, state: &ProvisionState) -> Result<Self, AppError> {
         crate::cloudflare::validate_input(input)?;
         let result = Self {

@@ -1,5 +1,9 @@
 # تطوير Mawjivo والتحقق منه
 
+ملف التطوير الخاص `mawjivo.secrets.env` يحتوي على مفاتيح التوقيع والنشر بنص واضح، وملف `mawjivo-device.secrets.env` يحتوي على بيانات استعادة ربط جهاز المستخدم. كلاهما محلي ومستبعد من Git. حفظ ملف التطوير خارج الجهاز مطلوب لمواصلة التوقيع والنشر بعد الفورمات؛ ملف نقل المستخدم لا يحمل مفتاح توقيع المشروع.
+
+لإثبات النقل دون تغيير بيانات المستخدم، ابْنِ أداة المشغّل عبر `cargo build --manifest-path apps/desktop/src-tauri/Cargo.toml --locked --features operator-tools --bin setup` ثم شغّل `node scripts/accept-settings-transfer.mjs مسار-ملف-الجهاز مجلد-الأدلة`. تستخدم الأداة `--verify-transfer-file` للقراءة فقط و`--accept-transfer` لإنشاء SQLite وخزنة نظام معزولتين وفارغتين، وتستورد وتعيد التصدير وتقارن معرفات الموارد والمساحات والحسابات والمنشورات. تزيل بيانات الاختبار والمراجع التي أنشأتها فقط، وتحفظ دليلًا خاليًا من الأسرار. لا توزع أداة `setup` مع المثبت.
+
 الإصدارات المثبتة موجودة في `tools/dependencies.json` وملف Rust وملف القفل. ثبّت Node LTS المذكور، ثم pnpm المذكور في `package.json` وأداة Rust مع rustfmt وclippy. لا تستخدم أداة وسائط موجودة في PATH؛ ينزل `pnpm media:tools` الحزمة الموثقة ويفحص كل مكوّن.
 
 شغّل `pnpm install --frozen-lockfile` ثم `pnpm verify` للتحقق من الأنواع والاختبارات والبناء وخدمة Cloudflare وRust. شغّل `pnpm test:e2e` لفحص الواجهة، و`pnpm sync-version --check` لفحص نسخ التطبيق والخدمة. لتغيير الإصدار استخدم `pnpm sync-version 0.2.0` ثم أعد بناء حزمة الخدمة. لا تعدل رقمًا واحدًا فقط.

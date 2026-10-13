@@ -5,6 +5,7 @@ import { ConnectionsPage } from './features/settings/ConnectionsPage';
 import { WorkspaceSettings } from './features/settings/WorkspaceSettings';
 import { TelegramPage } from './features/settings/TelegramPage';
 import { UpdatesPage } from './features/settings/UpdatesPage';
+import { TransferPage } from './features/settings/TransferPage';
 import { ComposerPage } from './features/composer/ComposerPage';
 import { ScheduledPage } from './features/history/ScheduledPage';
 import { SummaryPage } from './features/history/SummaryPage';
@@ -68,7 +69,7 @@ export function App(): ReactElement {
     [workspaces, setWorkspaces] = useState<Workspace[]>([]),
     [workspaceId, setWorkspaceId] = useState('');
   const [settingsPage, setSettingsPage] = useState<
-      'cloudflare' | 'workspaces' | 'connections' | 'telegram' | 'updates'
+      'cloudflare' | 'workspaces' | 'connections' | 'telegram' | 'updates' | 'transfer'
     >('cloudflare'),
     [message, setMessage] = useState('');
   const workspace = workspaces.find((item) => item.id === workspaceId) ?? null;
@@ -180,6 +181,7 @@ export function App(): ReactElement {
                   { id: 'connections', label: 'حسابات النشر' },
                   { id: 'telegram', label: 'تليجرام والمراقبة' },
                   { id: 'updates', label: 'التحديثات' },
+                  { id: 'transfer', label: 'نقل الإعدادات والحسابات' },
                 ] as const
               ).map((item) => (
                 <button
@@ -192,7 +194,13 @@ export function App(): ReactElement {
                 </button>
               ))}
             </nav>
-            {settingsPage === 'cloudflare' ? (
+            {settingsPage === 'transfer' ? (
+              <TransferPage
+                onImported={async () => {
+                  setProfiles(await listProfiles());
+                }}
+              />
+            ) : settingsPage === 'cloudflare' ? (
               <SetupPage
                 onReady={(item) => {
                   setProfiles((current) => [...current.filter((p) => p.id !== item.id), item]);
@@ -257,6 +265,15 @@ export function App(): ReactElement {
             </p>
             <button type="button" className="primary" onClick={() => setPage('settings')}>
               فتح الإعدادات
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setSettingsPage('transfer');
+                setPage('settings');
+              }}
+            >
+              نقل الإعدادات والحسابات
             </button>
           </section>
         )}

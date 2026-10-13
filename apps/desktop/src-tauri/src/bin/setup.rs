@@ -8,6 +8,7 @@ use mawjivo_lib::{
 use serde_json::Value;
 use std::io::Read;
 use zeroize::Zeroizing;
+mod transfer_acceptance;
 fn main() {
     let outcome = tauri::async_runtime::block_on(run());
     match outcome {
@@ -22,6 +23,13 @@ fn main() {
     }
 }
 async fn run() -> Result<Value, AppError> {
+    let args: Vec<_> = std::env::args().skip(1).collect();
+    if args
+        .first()
+        .is_some_and(|arg| arg == "--verify-transfer-file" || arg == "--accept-transfer")
+    {
+        return transfer_acceptance::run(&args).await;
+    }
     let mut text = Zeroizing::new(String::new());
     std::io::stdin()
         .take(16_385)

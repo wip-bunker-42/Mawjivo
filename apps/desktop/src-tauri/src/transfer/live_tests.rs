@@ -12,6 +12,8 @@ struct ReadApi {
     foreign_owner: bool,
     wrong_worker: bool,
     wrong_binding: bool,
+    wrong_database: bool,
+    wrong_bucket: bool,
 }
 impl Default for ReadApi {
     fn default() -> Self {
@@ -23,6 +25,8 @@ impl Default for ReadApi {
             foreign_owner: false,
             wrong_worker: false,
             wrong_binding: false,
+            wrong_database: false,
+            wrong_bucket: false,
         }
     }
 }
@@ -71,6 +75,8 @@ impl TransferReadApi for ReadApi {
             "bindings":[
                 {"name":"SERVICE_ID","type":"plain_text","text":if self.wrong_binding {"another-service"} else {&state.profile.service_id}},
                 {"name":"SERVICE_VERSION","type":"plain_text","text":"0.1.0"}
+                ,{"name":"DB","type":"d1","id":if self.wrong_database {"other-database"} else {state.database_id.as_deref().unwrap()}},
+                {"name":"MEDIA","type":"r2_bucket","bucket_name":if self.wrong_bucket {"other-bucket".into()} else {format!("{}-media",state.worker_name())}}
             ]
         }))
     }
@@ -267,4 +273,21 @@ async fn empty_device_scope_reads_no_accounts_or_telegram() {
     assert!(result.snapshot.connections.is_empty());
     assert!(result.snapshot.telegram.is_empty());
     assert_eq!(api.sql.lock().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn worker_bound_to_different_resources_is_rejected_before_bearer() {
+    for api in [
+        ReadApi {
+            wrong_database: true,
+            ..Default::default()
+        },
+        ReadApi {
+            wrong_bucket: true,
+            ..Default::default()
+        },
+    ] {
+        assert!(inspect_with(&api, &state(), &secrets()).await.is_err());
+        assert!(api.workspace_requests.lock().unwrap().is_empty());
+    }
 }

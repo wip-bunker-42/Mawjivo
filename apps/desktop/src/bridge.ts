@@ -45,6 +45,13 @@ export function provisionService(input: ProvisionInput): Promise<ServiceProfile>
 export async function listProfiles(): Promise<ServiceProfile[]> {
   return isTauri() ? native('list_profiles') : [];
 }
+export interface TransferSummary {
+  services: number;
+  workspaces: number;
+  connections: number;
+}
+export const exportSettings = () => native<TransferSummary | null>('export_settings');
+export const importSettings = () => native<TransferSummary | null>('import_settings');
 export function serviceRequest<T>(
   profileId: string,
   method: string,
