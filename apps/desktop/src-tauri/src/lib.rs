@@ -6,6 +6,7 @@ pub mod error;
 pub mod media;
 pub mod profiles;
 pub mod service_artifact;
+pub mod transfer;
 pub mod updates;
 pub mod upload;
 pub mod vault;

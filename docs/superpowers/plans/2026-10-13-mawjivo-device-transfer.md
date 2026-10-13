@@ -50,7 +50,7 @@
 - `parse_env(bytes: &[u8]) -> Result<TransferBundle, AppError>` و`serialize_env(bundle: &TransferBundle) -> Result<Vec<u8>, AppError>`.
 - مساعدا الاختبار `fixture_bundle(count: usize) -> TransferBundle` و`legacy_env(bundle: &TransferBundle) -> Vec<u8>` ينتجان بيانات مصطنعة؛ لا يقرآن ملفات المالك ولا يستعملان serializer الإنتاج لبناء الحالة القديمة.
 
-- [ ] **Step 1 — RED:** أضف الاختبارات التالية إلى `tests/transfer.rs`:
+- [x] **Step 1 — RED:** أضف الاختبارات التالية إلى `tests/transfer.rs`:
 
 ```rust
 let old = parse_env(&legacy_env(&fixture_bundle(1))).unwrap();
@@ -62,10 +62,10 @@ assert_eq!(many.services.len(), 2);
 
 أضف `rejects_duplicate_env_keys`, `rejects_files_over_two_mib`, `rejects_foreign_vault_references`, و`ignores_project_signing_fields`؛ تثبت الأخيرة أن مفاتيح التوقيع لا تدخل `services[*].secrets`. تثبت حالة تضارب الحقل المفرد والمصفوفة الرفض، وتحفظ حالة round-trip أسماء عربية وJSON يحتوي علامات اقتباس و`=`.
 
-- [ ] **Step 2:** شغّل `cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --locked --test transfer`؛ يتوقع فشل بسبب غياب واجهة النقل، لا فشل تجهيز أداة Rust.
-- [ ] **Step 3 — GREEN:** نفذ الصيغة المحددة بالمواصفة. افحص الحد قبل JSON، وارفض المفاتيح المكررة ونسخة غير `1` وعلاقات المعرفات الغامضة. احصر مراجع الخزنة في `device/encryption/cloudflare/r2-access/r2-secret/healthchecks` تحت معرف كل خدمة. لا تشتق `Debug` للأنواع التي تحمل أسرارًا. انقل البدائل المفردة المعروفة إلى التمثيل العام دون تنفيذ قيمها.
-- [ ] **Step 4:** أعد نفس أمر الاختبار، ثم `cargo fmt --manifest-path apps/desktop/src-tauri/Cargo.toml --check`؛ يتوقع النجاح.
-- [ ] **Step 5:** احفظ commit مستقل: `feat: define portable settings format with legacy compatibility`.
+- [x] **Step 2:** شغّل `cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --locked --test transfer`؛ يتوقع فشل بسبب غياب واجهة النقل، لا فشل تجهيز أداة Rust.
+- [x] **Step 3 — GREEN:** نفذ الصيغة المحددة بالمواصفة. افحص الحد قبل JSON، وارفض المفاتيح المكررة ونسخة غير `1` وعلاقات المعرفات الغامضة. احصر مراجع الخزنة في `device/encryption/cloudflare/r2-access/r2-secret/healthchecks` تحت معرف كل خدمة. لا تشتق `Debug` للأنواع التي تحمل أسرارًا. انقل البدائل المفردة المعروفة إلى التمثيل العام دون تنفيذ قيمها.
+- [x] **Step 4:** أعد نفس أمر الاختبار، ثم `cargo fmt --manifest-path apps/desktop/src-tauri/Cargo.toml --check`؛ يتوقع النجاح.
+- [x] **Step 5:** احفظ commit مستقل: `feat: define portable settings format with legacy compatibility`.
 
 ### Task 2: القراءة الحية وملكية الخدمة والتشفير
 
