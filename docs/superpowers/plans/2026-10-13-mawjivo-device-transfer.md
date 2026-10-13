@@ -77,7 +77,7 @@ assert_eq!(many.services.len(), 2);
 - `CloudflareTransferSource` ينفذ الواجهة ويعيد تعريفًا مثبت الملكية ونسخة الحسابات الحالية؛ يستخدم عميل الإدارة الموجود ولا يستدعي `provision_with` أو `deploy` أو `bucket` أو `database`.
 - `decrypt_connection(cipher: &str, key_base64: &str, workspace_id: &str, connection_id: &str, key_version: u64) -> Result<serde_json::Value, AppError>`؛ سياق AAD هو JSON للمصفوفة `[workspaceId,connectionId,keyVersion]` كما في `apps/service/src/secrets.ts`.
 
-- [ ] **Step 1 — RED:** أضف `decrypts_service_web_crypto_envelope`, `rejects_wrong_aad_or_key`, `foreign_base_url_receives_no_device_bearer`, `revoked_device_is_rejected`, `scopes_accounts_to_allowed_workspaces`, و`unavailable_profile_does_not_return_partial_export`. تثبت حالة القراءة صفر استدعاءات إنشاء أو ترقية وصفر طلبات Meta/Buffer. تسجل بدائل الشبكة الوجهة قبل إرسال Authorization لتثبت غياب الطلب للأجنبي.
+- [x] **Step 1 — RED:** أضف `decrypts_service_web_crypto_envelope`, `rejects_wrong_aad_or_key`, `foreign_base_url_receives_no_device_bearer`, `revoked_device_is_rejected`, `scopes_accounts_to_allowed_workspaces`, و`unavailable_profile_does_not_return_partial_export`. تثبت حالة القراءة صفر استدعاءات إنشاء أو ترقية وصفر طلبات Meta/Buffer. تسجل بدائل الشبكة الوجهة قبل إرسال Authorization لتثبت غياب الطلب للأجنبي.
 
 ```rust
 assert!(decrypt_connection(&tampered_cipher, &key, &ws, &id, 1).is_err());
@@ -87,10 +87,10 @@ assert_eq!(exported_allowed_workspace_ids, device_allowed_workspace_ids);
 assert!(unavailable_profile_export.is_err());
 ```
 
-- [ ] **Step 2:** شغّل `cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --test transfer` لتسجيل فشل السلوك الجديد، ثم أضف `aes-gcm` بالإصدار المثبت أعلاه فقط ونفذ الحد الأدنى للوحدات. يحدّث Cargo ملف القفل عند إضافة الاعتمادية، ثم تستخدم `--locked` في التحقق اللاحق.
-- [ ] **Step 3 — GREEN:** افحص علامات Worker وD1 وR2 أولًا. أثبت custom domain من ربط Cloudflare الفعلي، أو أثبت workers.dev من subdomain الحساب. اقرأ سجل الجهاز ورفض الإلغاء ونطاقه؛ لا ترسل bearer إلى عنوان الملف قبل إثباته، ولا تتبع redirect. اقرأ الحسابات وتليجرام باستعلامات SELECT مقيدة بمعرفات المساحات، وفك البيانات بـAES-GCM مع nonce بطول 12 بايت ومفتاح بطول 32 بايت ونسخة المفتاح المعتمدة. افحص جميع نتائج الخدمات، وأعد أحدث إعدادات المساحات من الخدمة.
-- [ ] **Step 4:** شغّل اختبار `transfer` بـ`--locked` ثم `pnpm check:secrets` و`cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml --locked --all-targets --all-features -- -D warnings`؛ يتوقع النجاح. لا تطبع ciphertext أو plaintext عند فشل التحقق.
-- [ ] **Step 5:** احفظ commit: `feat: verify and read owned settings for portable export`.
+- [x] **Step 2:** شغّل `cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --test transfer` لتسجيل فشل السلوك الجديد، ثم أضف `aes-gcm` بالإصدار المثبت أعلاه فقط ونفذ الحد الأدنى للوحدات. يحدّث Cargo ملف القفل عند إضافة الاعتمادية، ثم تستخدم `--locked` في التحقق اللاحق.
+- [x] **Step 3 — GREEN:** افحص علامات Worker وD1 وR2 أولًا. أثبت custom domain من ربط Cloudflare الفعلي، أو أثبت workers.dev من subdomain الحساب. اقرأ سجل الجهاز ورفض الإلغاء ونطاقه؛ لا ترسل bearer إلى عنوان الملف قبل إثباته، ولا تتبع redirect. اقرأ الحسابات وتليجرام باستعلامات SELECT مقيدة بمعرفات المساحات، وفك البيانات بـAES-GCM مع nonce بطول 12 بايت ومفتاح بطول 32 بايت ونسخة المفتاح المعتمدة. افحص جميع نتائج الخدمات، وأعد أحدث إعدادات المساحات من الخدمة.
+- [x] **Step 4:** شغّل اختبار `transfer` بـ`--locked` ثم `pnpm check:secrets` و`cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml --locked --all-targets --all-features -- -D warnings`؛ يتوقع النجاح. لا تطبع ciphertext أو plaintext عند فشل التحقق.
+- [x] **Step 5:** احفظ commit: `feat: verify and read owned settings for portable export`.
 
 ### Task 3: حفظ الملف واستيراد المجموعة بصورة متسقة
 

@@ -1,0 +1,16 @@
+{
+  "keyBase64": "BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc=",
+  "workspaceId": "space-1",
+  "connectionId": "meta-1",
+  "keyVersion": 1,
+  "plain": {
+    "pageAccessToken": "TEST_page_token_not_real",
+    "userAccessToken": "TEST_user_token_not_real",
+    "pageId": "1",
+    "instagramId": "2"
+  },
+  "cipher": "v1.1.AwMDAwMDAwMDAwMD.XtzTYj1NHyEZJTAvvziUaYMe2s3g0MckcK7m1oa6NNfawhN99ZTRH7ztKmmv4sUwVEFhherhWARffEHIW0KqUtW3fiv7+QFiLJTo87v8oV2ixKYBVRErTIBz+PUDYUZnjKYSnY5SAmdepEh6HoJ61vv4IAtdruU7i+bfsXQ2MRxh2J76gN0WiT1g",
+  "deviceToken": "TEST_transfer_device_00000000000000000000000000000001",
+  "deviceTokenSha256": "0b7325d5ef78cc9150a549eaeaa414478ebc3195c838fc075ff05211d0e2dbad",
+  "telegramCipher": "v1.1.BQUFBQUFBQUFBQUF.mdPlR6XJEFiFGX9KpznM5wMZfGafuyX1RJ3HMpNJx7iP7z0O7R3YcM8ydvB/3kIc3lZ1DeAF6uVvKYdpUCn3rAglXoTCZNrMyEs3iMesfouHo7N+gj6p"
+}

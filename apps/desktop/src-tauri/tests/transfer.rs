@@ -185,3 +185,55 @@ fn rejects_inconsistent_secret_alias_and_unsafe_service_url() {
         "https://user:password@space-1.example.test/?token=x".into();
     assert_eq!(error_code(&legacy_env(&bundle)), "TRANSFER_FILE_INVALID");
 }
+
+#[test]
+fn decrypts_service_web_crypto_envelope() {
+    let fixture: serde_json::Value = serde_json::from_str(include_str!(
+        "../../../../tests/fixtures/transfer-aes-gcm.json"
+    ))
+    .unwrap();
+    let actual = mawjivo_lib::transfer::decrypt_connection(
+        fixture["cipher"].as_str().unwrap(),
+        fixture["keyBase64"].as_str().unwrap(),
+        "space-1",
+        "meta-1",
+        1,
+    )
+    .unwrap();
+    assert_eq!(actual["pageAccessToken"], "TEST_page_token_not_real");
+    assert_eq!(actual["instagramId"], "2");
+}
+
+#[test]
+fn rejects_wrong_aad_or_key() {
+    let fixture: serde_json::Value = serde_json::from_str(include_str!(
+        "../../../../tests/fixtures/transfer-aes-gcm.json"
+    ))
+    .unwrap();
+    for (workspace, connection, version) in [
+        ("foreign-space", "meta-1", 1),
+        ("space-1", "foreign-connection", 1),
+        ("space-1", "meta-1", 2),
+    ] {
+        assert!(
+            mawjivo_lib::transfer::decrypt_connection(
+                fixture["cipher"].as_str().unwrap(),
+                fixture["keyBase64"].as_str().unwrap(),
+                workspace,
+                connection,
+                version
+            )
+            .is_err()
+        );
+    }
+    assert!(
+        mawjivo_lib::transfer::decrypt_connection(
+            fixture["cipher"].as_str().unwrap(),
+            "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+            "space-1",
+            "meta-1",
+            1
+        )
+        .is_err()
+    );
+}

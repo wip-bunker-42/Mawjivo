@@ -489,6 +489,76 @@ impl CloudflareClient {
     }
 }
 #[async_trait]
+impl crate::transfer::live::TransferReadApi for CloudflareClient {
+    async fn settings(&self, state: &ProvisionState) -> Result<Value, AppError> {
+        self.call(
+            Method::GET,
+            &self.account_path(&format!(
+                "/workers/scripts/{}/settings",
+                state.worker_name()
+            )),
+            None,
+        )
+        .await
+    }
+    async fn verify_resources(&self, state: &ProvisionState) -> Result<(), AppError> {
+        self.verify_existing_resources(state).await
+    }
+    async fn domains(&self) -> Result<Value, AppError> {
+        self.call(Method::GET, &self.account_path("/workers/domains"), None)
+            .await
+    }
+    async fn workers_subdomain(&self) -> Result<String, AppError> {
+        self.call(Method::GET, &self.account_path("/workers/subdomain"), None)
+            .await?["subdomain"]
+            .as_str()
+            .map(String::from)
+            .ok_or_else(invalid_response)
+    }
+    async fn query(
+        &self,
+        state: &ProvisionState,
+        sql: &str,
+        params: Vec<String>,
+    ) -> Result<Vec<Value>, AppError> {
+        if !sql.starts_with("SELECT ") {
+            return Err(invalid_response());
+        }
+        let response = self
+            .query(
+                state.database_id.as_deref().ok_or_else(invalid_response)?,
+                sql,
+                params,
+            )
+            .await?;
+        if response.as_array().is_none_or(|results| results.len() != 1) {
+            return Err(invalid_response());
+        }
+        response[0]["results"]
+            .as_array()
+            .cloned()
+            .ok_or_else(invalid_response)
+    }
+    async fn workspaces(&self, base_url: &str, token: &str) -> Result<Vec<Value>, AppError> {
+        let response = self
+            .client
+            .get(format!("{}/api/workspaces", base_url.trim_end_matches('/')))
+            .bearer_auth(token)
+            .send()
+            .await
+            .map_err(|_| AppError::new("NETWORK", "تعذر الوصول للخدمة. تحقق من اتصالك."))?;
+        if !response.status().is_success() {
+            return Err(AppError::new(
+                "TRANSFER_UNVERIFIED",
+                "تعذر قراءة مساحات الخدمة. راجع ربط الجهاز.",
+            ));
+        }
+        let value: Value = serde_json::from_slice(&bounded_body(response, 2_097_152).await?)
+            .map_err(|_| invalid_response())?;
+        value.as_array().cloned().ok_or_else(invalid_response)
+    }
+}
+#[async_trait]
 impl ProvisionApi for CloudflareClient {
     async fn verify_existing_resources(&self, state: &ProvisionState) -> Result<(), AppError> {
         let database = state.database_id.as_deref().ok_or_else(invalid_response)?;

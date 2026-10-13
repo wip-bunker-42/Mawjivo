@@ -47,6 +47,7 @@ tokio = { version = "=1.53.2", features = ["sync", "fs", "io-util", "time", "mac
 bytes = "=1.12.1"
 futures-util = "=0.3.34"
 async-trait = "=0.1.92"
+aes-gcm = "=0.11.1"
 image = { version = "=0.25.10", default-features = false, features = ["jpeg", "png", "webp", "bmp", "tiff", "gif", "pnm"] }
 fs4 = { version = "=1.1.0", default-features = false, features = ["sync"] }
 tauri-plugin-dialog = "=2.8.1"
