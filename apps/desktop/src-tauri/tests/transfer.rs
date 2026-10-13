@@ -1,3 +1,7 @@
+#[path = "support/transfer_operation_tests.rs"]
+mod operation_tests;
+#[path = "support/transfer_operations.rs"]
+mod operations_support;
 #[path = "support/transfer.rs"]
 mod support;
 use mawjivo_lib::transfer::{parse_env, serialize_env};

@@ -30,6 +30,10 @@ fn database_ownership_script_is_valid_without_d1_multi_statement_parameters() {
 #[derive(Default)]
 struct TestVault(Mutex<HashMap<String, String>>);
 impl Vault for TestVault {
+    fn delete(&self, reference: &str) -> Result<(), AppError> {
+        self.0.lock().unwrap().remove(reference);
+        Ok(())
+    }
     fn get(&self, reference: &str) -> Result<String, AppError> {
         self.0
             .lock()

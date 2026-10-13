@@ -104,7 +104,7 @@ assert!(unavailable_profile_export.is_err());
 - `import_from(source: &dyn TransferSource, vault: &dyn Vault, store: &LocalStore, path: &Path) -> Result<(TransferSummary, Vec<ServiceProfile>), AppError>`.
 - أمران `export_settings` و`import_settings` يفتحان مربع الملف داخل Rust، ويعيدان `Result<Option<TransferSummary>, AppError>`؛ `None` يعني إلغاء. يقرأ App قائمة التعريفات بعد نجاح الاستيراد بدل نقل الأسرار في النتيجة.
 
-- [ ] **Step 1 — RED:** أضف `import_twice_keeps_one_profile`, `vault_failure_restores_old_profiles`, `sqlite_failure_removes_only_new_credentials`, `interrupted_matching_vault_entries_can_resume`, `conflicting_profile_is_not_overwritten`, `current_cloud_preferences_win_over_export_snapshot`، و`second_profile_failure_commits_nothing`. في كل حالة فشل قارن التعريفات والمراجع القديمة، وتحقق من عدم وجود مسودة أو منشور سحابي جديد.
+- [x] **Step 1 — RED:** أضف `import_twice_keeps_one_profile`, `vault_failure_restores_old_profiles`, `sqlite_failure_removes_only_new_credentials`, `interrupted_matching_vault_entries_can_resume`, `conflicting_profile_is_not_overwritten`, `current_cloud_preferences_win_over_export_snapshot`، و`second_profile_failure_commits_nothing`. في كل حالة فشل قارن التعريفات والمراجع القديمة، وتحقق من عدم وجود مسودة أو منشور سحابي جديد.
 
 ```rust
 assert_eq!(store.list_states().unwrap().len(), 1); // بعد الاستيراد المكرر
@@ -114,10 +114,10 @@ assert_eq!(live_workspace["defaultYoutubeCategoryId"], "25");
 assert_eq!(captured_social_publish_requests.len(), 0);
 ```
 
-- [ ] **Step 2:** شغّل اختبار `transfer` بـ`--locked`؛ يتوقع فشل بسبب غياب عمليات الملف والمعاملة.
-- [ ] **Step 3 — GREEN:** اقرأ الملف بحد `2 MiB + 1` فعليًا لمنع تغير حجمه بعد فحص metadata. تحقق من جميع الخدمات قبل الحفظ. ارفض المراجع الموجودة ذات القيم المتعارضة، وأضف فقط المراجع الجديدة ثم التعريفات في معاملة واحدة. نظف ما أضيف عند فشل المعاملة، ولا تحذف أسرارًا سبقت العملية. سجل قائمة المراجع الجديدة في ذاكرة العملية فقط؛ لا تحتاج إلى جدول أو بروتوكول مزامنة جديد. استخدم backup SQLite المتسقة الموجودة قبل تغيير قاعدة قائمة. احفظ التصدير مؤقتًا في مجلد الوجهة ثم استبدله، ونظف المؤقتات عند الإلغاء أو الخطأ. تتولى أوامر Tauri قفل الإعداد وحاجز العمليات الحاليين.
-- [ ] **Step 4:** أعد اختبار `transfer` واختبارات `provision` و`updates` و`composer`؛ يتوقع النجاح دون تغيير سلوك المسودات أو التحديث. أضف assertion إلى اختبار حدود الأوامر يثبت أن JSON النتيجة لا يحمل `secrets` أو `credentials` أو signing key.
-- [ ] **Step 5:** احفظ commit: `feat: import existing service settings without recreating resources`.
+- [x] **Step 2:** شغّل اختبار `transfer` بـ`--locked`؛ يتوقع فشل بسبب غياب عمليات الملف والمعاملة.
+- [x] **Step 3 — GREEN:** اقرأ الملف بحد `2 MiB + 1` فعليًا لمنع تغير حجمه بعد فحص metadata. تحقق من جميع الخدمات قبل الحفظ. ارفض المراجع الموجودة ذات القيم المتعارضة، وأضف فقط المراجع الجديدة ثم التعريفات في معاملة واحدة. نظف ما أضيف عند فشل المعاملة، ولا تحذف أسرارًا سبقت العملية. سجل قائمة المراجع الجديدة في ذاكرة العملية فقط؛ لا تحتاج إلى جدول أو بروتوكول مزامنة جديد. استخدم backup SQLite المتسقة الموجودة قبل تغيير قاعدة قائمة. احفظ التصدير مؤقتًا في مجلد الوجهة ثم استبدله، ونظف المؤقتات عند الإلغاء أو الخطأ. تتولى أوامر Tauri قفل الإعداد وحاجز العمليات الحاليين.
+- [x] **Step 4:** أعد اختبار `transfer` واختبارات `provision` و`updates` و`composer`؛ يتوقع النجاح دون تغيير سلوك المسودات أو التحديث. أضف assertion إلى اختبار حدود الأوامر يثبت أن JSON النتيجة لا يحمل `secrets` أو `credentials` أو signing key.
+- [x] **Step 5:** احفظ commit: `feat: import existing service settings without recreating resources`.
 
 ### Task 4: الواجهة وإثبات جهاز جديد وتسليم النقل
 

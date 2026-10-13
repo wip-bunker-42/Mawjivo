@@ -2,7 +2,7 @@ use crate::contracts::AppError;
 use rusqlite::{Connection, OptionalExtension, params};
 use serde::{Deserialize, Serialize};
 use std::{
-    path::Path,
+    path::{Path, PathBuf},
     sync::{Mutex, MutexGuard},
 };
 use zeroize::Zeroize;
@@ -68,6 +68,7 @@ impl ProvisionState {
 }
 pub struct LocalStore {
     db: Mutex<Connection>,
+    path: Option<PathBuf>,
 }
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -82,6 +83,55 @@ fn storage_error(_: impl std::fmt::Debug) -> AppError {
         "LOCAL_STORE",
         "تعذر حفظ البيانات المحلية. تحقق من مساحة القرص وصلاحيات مجلد التطبيق.",
     )
+}
+fn read_states(db: &Connection) -> Result<Vec<ProvisionState>, AppError> {
+    let mut statement = db
+        .prepare("SELECT state_json FROM profiles ORDER BY rowid")
+        .map_err(storage_error)?;
+    statement
+        .query_map([], |row| row.get::<_, String>(0))
+        .map_err(storage_error)?
+        .map(|row| serde_json::from_str(&row.map_err(storage_error)?).map_err(storage_error))
+        .collect()
+}
+fn validate_import(
+    existing: &[ProvisionState],
+    incoming: &[ProvisionState],
+) -> Result<(), AppError> {
+    let conflict = || {
+        AppError::new(
+            "TRANSFER_CONFLICT",
+            "تختلف بيانات الخدمة عن الربط الموجود على هذا الجهاز. لم يُستبدل.",
+        )
+    };
+    let mut seen = std::collections::HashSet::new();
+    for state in incoming {
+        if !seen.insert(&state.profile.id) {
+            return Err(conflict());
+        }
+        for old in existing {
+            if old.profile.id == state.profile.id {
+                let mut profile = state.profile.clone();
+                profile.version = old.profile.version.clone();
+                if profile != old.profile
+                    || state.database_id != old.database_id
+                    || state.bucket_created != old.bucket_created
+                    || state.domain != old.domain
+                    || state.zone_id != old.zone_id
+                {
+                    return Err(conflict());
+                }
+            } else if old.profile.base_url.trim_end_matches('/')
+                == state.profile.base_url.trim_end_matches('/')
+                || (old.profile.account_id == state.profile.account_id
+                    && state.database_id.is_some()
+                    && state.database_id == old.database_id)
+            {
+                return Err(conflict());
+            }
+        }
+    }
+    Ok(())
 }
 fn consistent_backup(db: &Connection, path: &Path) -> Result<(), AppError> {
     if let Some(parent) = path.parent() {
@@ -215,7 +265,10 @@ impl LocalStore {
             CREATE TABLE IF NOT EXISTS window_drafts(profile_id TEXT NOT NULL,window_id TEXT NOT NULL,workspace_id TEXT NOT NULL,draft_id TEXT NOT NULL,PRIMARY KEY(profile_id,window_id),FOREIGN KEY(profile_id,workspace_id,draft_id) REFERENCES drafts(profile_id,workspace_id,id));
             CREATE TABLE IF NOT EXISTS composer_drafts(profile_id TEXT NOT NULL,window_id TEXT NOT NULL,workspace_id TEXT NOT NULL,draft_id TEXT NOT NULL,PRIMARY KEY(profile_id,window_id,workspace_id),FOREIGN KEY(profile_id,workspace_id,draft_id) REFERENCES drafts(profile_id,workspace_id,id));
             INSERT OR IGNORE INTO composer_drafts SELECT profile_id,window_id,workspace_id,draft_id FROM window_drafts;")?;
-        Ok(Self { db: Mutex::new(db) })
+        Ok(Self {
+            db: Mutex::new(db),
+            path: path.map(Path::to_path_buf),
+        })
     }
     pub fn backup(&self, path: &Path) -> Result<(), AppError> {
         let db = self.lock()?;
@@ -227,6 +280,55 @@ impl LocalStore {
     pub fn save_state(&self, state: &ProvisionState) -> Result<(), AppError> {
         self.lock()?.execute("INSERT INTO profiles(id,state_json) VALUES(?,?) ON CONFLICT(id) DO UPDATE SET state_json=excluded.state_json",params![state.profile.id,serde_json::to_string(state).map_err(storage_error)?]).map_err(storage_error)?;
         Ok(())
+    }
+    pub(crate) fn validate_import_states(&self, states: &[ProvisionState]) -> Result<(), AppError> {
+        validate_import(&self.list_states()?, states)
+    }
+    pub fn import_states(&self, states: &[ProvisionState]) -> Result<(), AppError> {
+        let mut db = self.lock()?;
+        let existing = read_states(&db)?;
+        validate_import(&existing, states)?;
+        if states.iter().all(|state| {
+            existing
+                .iter()
+                .any(|old| old.profile.id == state.profile.id)
+        }) {
+            return Ok(());
+        }
+        if let Some(path) = &self.path {
+            let backup = path
+                .parent()
+                .unwrap_or(Path::new("."))
+                .join("backups")
+                .join(format!(
+                    "before-settings-import-{}.sqlite",
+                    uuid::Uuid::new_v4()
+                ));
+            consistent_backup(&db, &backup)?;
+        }
+        let transaction = db
+            .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
+            .map_err(storage_error)?;
+        // Check again under the write transaction in case another process imported meanwhile.
+        let existing = read_states(&transaction)?;
+        validate_import(&existing, states)?;
+        for state in states {
+            if !existing
+                .iter()
+                .any(|old| old.profile.id == state.profile.id)
+            {
+                transaction
+                    .execute(
+                        "INSERT INTO profiles(id,state_json) VALUES(?,?)",
+                        params![
+                            state.profile.id,
+                            serde_json::to_string(state).map_err(storage_error)?
+                        ],
+                    )
+                    .map_err(storage_error)?;
+            }
+        }
+        transaction.commit().map_err(storage_error)
     }
     pub fn get_state(&self, id: &str) -> Result<ProvisionState, AppError> {
         let value: Option<String> = self
@@ -243,14 +345,7 @@ impl LocalStore {
     }
     pub fn list_states(&self) -> Result<Vec<ProvisionState>, AppError> {
         let db = self.lock()?;
-        let mut statement = db
-            .prepare("SELECT state_json FROM profiles ORDER BY rowid")
-            .map_err(storage_error)?;
-        statement
-            .query_map([], |row| row.get::<_, String>(0))
-            .map_err(storage_error)?
-            .map(|row| serde_json::from_str(&row.map_err(storage_error)?).map_err(storage_error))
-            .collect()
+        read_states(&db)
     }
     pub fn save_draft(
         &self,
