@@ -10,6 +10,22 @@ const release = {
   ],
   manifest: { version: '0.1.1' },
 };
+test('matching stored metadata still requires public byte verification before activation', async () => {
+  let writes = 0;
+  await assert.rejects(
+    publishRelease(release, {
+      verifySignature: async () => {},
+      inspect: async (object) => ({ sha256: object.sha256 }),
+      upload: async () => writes++,
+      verifyPublic: async () => {
+        throw new Error('RELEASE_PUBLIC_HASH');
+      },
+      putManifest: async () => writes++,
+    }),
+    /RELEASE_PUBLIC_HASH/,
+  );
+  assert.equal(writes, 0);
+});
 test('an invalid signed installer never changes public files or update channels', async () => {
   const calls = [];
   await assert.rejects(

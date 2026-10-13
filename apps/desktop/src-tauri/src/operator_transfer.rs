@@ -298,7 +298,7 @@ pub async fn run(args: &[String]) -> Result<Value, AppError> {
 }
 
 #[cfg(test)]
-#[path = "../../../tests/support/transfer.rs"]
+#[path = "../tests/support/transfer.rs"]
 mod fixtures;
 #[cfg(test)]
 mod tests {

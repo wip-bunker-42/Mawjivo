@@ -15,6 +15,7 @@
     "media:tools": "node scripts/fetch-media-tools.mjs",
     "operator:setup": "node scripts/operator-setup.mjs",
     "tauri:build": "pnpm --dir apps/desktop exec tauri build",
+    "release:build": "node scripts/operator-release.mjs",
     "verify": "node scripts/verify.mjs",
     "verify:js": "node scripts/verify.mjs --javascript",
     "verify:production": "node scripts/verify-production.mjs",
@@ -28,6 +29,7 @@
     "@axe-core/playwright": "4.13.0",
     "@playwright/test": "1.64.0",
     "@types/node": "24.19.2",
+    "fast-xml-parser": "5.11.2",
     "prettier": "3.9.9",
     "typescript": "7.0.2",
     "vitest": "5.0.3"

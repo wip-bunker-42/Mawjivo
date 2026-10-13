@@ -19,7 +19,11 @@ export async function publishRelease(release, control) {
   }
   await control.verifySignature(release);
   await publishDownloads(release.objects, {
-    inspect: control.inspect,
+    inspect: async (object) => {
+      const existing = await control.inspect(object);
+      if (existing?.sha256 === object.sha256) await control.verifyPublic(object);
+      return existing;
+    },
     upload: async (object) => {
       await control.upload(object);
       await control.verifyPublic(object);

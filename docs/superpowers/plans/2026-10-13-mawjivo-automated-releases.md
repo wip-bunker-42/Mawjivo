@@ -53,7 +53,7 @@
 - `createReleaseStore(credentials) -> ReleaseStore` يوفر `verifyOwnership()`, `listObjects(prefix)`, `inspect(object)`, `upload(object)`, `verifyPublic(object)`, `readManifest(channel)`, `putManifest(channel, manifest, expectedEtag)`, `readIndex()`, `putIndex(index, expectedEtag)`, `deleteObjects(keys)`.
 - نتيجة القراءة `{value, etag}` أو `{value:null, etag:null}`؛ نتيجة الحذف `{deletedKeys, errors}`. تستخدم الكتابة `If-Match` أو `If-None-Match: *`، ويصبح 412 خطأ تعارض واضحًا.
 
-- [ ] **Step 1 — RED:** اختبر تحميل أسماء الأسرار الحالية وبديل `TAURI_SIGNING_PRIVATE_KEY` المتطابق، وعدم تضمين قيمة في stderr عند الغياب، وغياب أي استدعاء DPAPI. اختبر نقل R2: علامة ملكية خاطئة تمنع كل كتابة، وإعادة ملف مطابق تتخطى PUT، وملف مختلف يرفض، و412 لا يستبدل ملفًا، وpublic hash خاطئ يمنع نجاح الرفع. استخدم ملفات مؤقتة بكريدنشلز مصطنعة ومساعد `fakeStore` يسجل الأفعال، دون الاتصال بحساب المالك.
+- [x] **Step 1 — RED:** اختبر تحميل أسماء الأسرار الحالية وبديل `TAURI_SIGNING_PRIVATE_KEY` المتطابق، وعدم تضمين قيمة في stderr عند الغياب، وغياب أي استدعاء DPAPI. اختبر نقل R2: علامة ملكية خاطئة تمنع كل كتابة، وإعادة ملف مطابق تتخطى PUT، وملف مختلف يرفض، و412 لا يستبدل ملفًا، وpublic hash خاطئ يمنع نجاح الرفع. استخدم ملفات مؤقتة بكريدنشلز مصطنعة ومساعد `fakeStore` يسجل الأفعال، دون الاتصال بحساب المالك.
 
 ```js
 assert.equal(loaded.MAWJIVO_SIGNING_PRIVATE_KEY, syntheticPrivateKey);
@@ -63,10 +63,10 @@ await assert.rejects(uploadDifferentBytes, /IMMUTABLE/);
 await assert.rejects(conditionalWriteConflict, /CONFLICT/);
 ```
 
-- [ ] **Step 2:** شغّل `node --test scripts/test/release-env.test.mjs scripts/test/release-store.test.mjs`؛ يتوقع فشل غياب الوحدات.
-- [ ] **Step 3 — GREEN:** افصل transport من ناشر R2 الموجود واستعمل `fast-xml-parser` بالإصدار المثبت. ارفض XML غير صالح والتكرار وحجم الاستجابة الأكبر من 2 MiB وPagination التي تتجاوز 20 صفحة من 1000 عنصر. استعمل نقلًا متدفقًا للبصمات والملفات، وأبق أسماء الحزمة وفحوص المدقق الأصلي الحالية. تقرأ الأداة المحلية ملف ENV بمسار صريح؛ لا تطبع أو تمرر private key في argv. تستخدم metadata لتجاوز تحميل ملف مطابق وتثبت محتواه العام قبل التفعيل.
-- [ ] **Step 4:** أعد الاختبارات ثم `pnpm test:scripts` و`pnpm check:secrets`. نفذ بناء حزمة محلية موقعة من ملف التطوير الحقيقي إلى `.tools/` باستخدام CLI الجديد، وتحقق منها بالمدقق الأصلي. لا تنشرها في هذه المهمة.
-- [ ] **Step 5:** احفظ commit: `feat: build signed releases from portable operator credentials`.
+- [x] **Step 2:** شغّل `node --test scripts/test/release-env.test.mjs scripts/test/release-store.test.mjs`؛ يتوقع فشل غياب الوحدات.
+- [x] **Step 3 — GREEN:** افصل transport من ناشر R2 الموجود واستعمل `fast-xml-parser` بالإصدار المثبت. ارفض XML غير صالح والتكرار وحجم الاستجابة الأكبر من 2 MiB وPagination التي تتجاوز 20 صفحة من 1000 عنصر. استعمل نقلًا متدفقًا للبصمات والملفات، وأبق أسماء الحزمة وفحوص المدقق الأصلي الحالية. تقرأ الأداة المحلية ملف ENV بمسار صريح؛ لا تطبع أو تمرر private key في argv. تستخدم metadata لتجاوز تحميل ملف مطابق وتثبت محتواه العام قبل التفعيل.
+- [x] **Step 4:** أعد الاختبارات ثم `pnpm test:scripts` و`pnpm check:secrets`. نفذ بناء حزمة محلية موقعة من ملف التطوير الحقيقي إلى `.tools/` باستخدام CLI الجديد، وتحقق منها بالمدقق الأصلي. لا تنشرها في هذه المهمة.
+- [x] **Step 5:** احفظ commit: `feat: build signed releases from portable operator credentials`.
 
 ### Task 2: سجل الإصدارات وسياسة الحذف المتسقة
 

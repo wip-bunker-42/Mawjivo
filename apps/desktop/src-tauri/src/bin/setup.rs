@@ -8,6 +8,7 @@ use mawjivo_lib::{
 use serde_json::Value;
 use std::io::Read;
 use zeroize::Zeroizing;
+#[path = "../operator_transfer.rs"]
 mod transfer_acceptance;
 fn main() {
     let outcome = tauri::async_runtime::block_on(run());
