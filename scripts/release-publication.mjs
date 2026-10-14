@@ -24,6 +24,9 @@ async function verifySignature(release, store) {
     throw new Error('RELEASE_SIGNATURE_INVALID');
 }
 export async function stageRelease(release, store) {
+  return store.withMutationLock(() => stageLocked(release, store));
+}
+async function stageLocked(release, store) {
   stableVersion(release.version);
   await verifySignature(release, store);
   await store.verifyOwnership();
@@ -67,6 +70,20 @@ function acceptanceMatches(release, proof) {
   );
 }
 export async function activateRelease(staged, proof, store) {
+  const result = await store.withMutationLock(() => activateLocked(staged, proof, store));
+  let cleanup;
+  try {
+    cleanup = await cleanupReleases(store);
+  } catch {
+    cleanup = {
+      deletedKeys: [],
+      remainingBytes: null,
+      errors: [{ key: '', code: 'RELEASE_CLEANUP_DEFERRED' }],
+    };
+  }
+  return { ...result, cleanup };
+}
+async function activateLocked(staged, proof, store) {
   const { release, verifiedObjectKeys } = staged;
   stableVersion(release.version);
   if (!['production', 'test'].includes(release.channel)) throw new Error('RELEASE_CHANNEL');
@@ -90,6 +107,12 @@ export async function activateRelease(staged, proof, store) {
       throw new Error('RELEASE_VERSION_CONFLICT');
   }
   const index = await store.readIndex();
+  for (const object of release.objects) {
+    const actual = await store.inspect(object);
+    if (!actual || actual.bytes !== object.bytes || actual.sha256 !== object.sha256)
+      throw new Error('RELEASE_STAGE_EXPIRED');
+    await store.verifyPublic(object, { fresh: true });
+  }
   const records = validateIndex(index.value ?? { schemaVersion: 1, records: [] });
   let next = records;
   if (release.channel === 'production') next = recordRelease(records, release, Date.now());
@@ -97,21 +120,10 @@ export async function activateRelease(staged, proof, store) {
     await store.putManifest(release.channel, release.manifest, current.etag);
   else await store.verifyManifest(release.channel, release.manifest);
   if (release.channel === 'production') await store.putIndex(next, index.etag);
-  let cleanup;
-  try {
-    cleanup = await cleanupReleases(store);
-  } catch {
-    cleanup = {
-      deletedKeys: [],
-      remainingBytes: null,
-      errors: [{ key: '', code: 'RELEASE_CLEANUP_DEFERRED' }],
-    };
-  }
   return {
     version: release.version,
     sourceCommit: release.sourceCommit,
     channel: release.channel,
-    cleanup,
   };
 }
 

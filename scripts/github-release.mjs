@@ -6,8 +6,8 @@ import { pathToFileURL, fileURLToPath } from 'node:url';
 import { verifyReleasePackage, hashFile } from './verify-release.mjs';
 import { stableVersion } from './release-records.mjs';
 const root = fileURLToPath(new URL('..', import.meta.url));
-function gh(args) {
-  const result = spawnSync('gh', args, {
+function gh(args, run = spawnSync) {
+  const result = run('gh', args, {
     encoding: 'utf8',
     windowsHide: true,
     maxBuffer: 2 * 1048576,
@@ -18,7 +18,7 @@ function gh(args) {
     if (/HTTP 404/.test(result.stderr ?? '')) return null;
     throw new Error('GITHUB_RELEASE_API_FAILED');
   }
-  return JSON.parse(result.stdout);
+  return result.stdout.trim() ? JSON.parse(result.stdout) : null;
 }
 async function bodyRequest(endpoint, method, body) {
   const directory = await mkdtemp(join(tmpdir(), 'mawjivo-gh-body-'));
@@ -41,7 +41,7 @@ async function bodyRequest(endpoint, method, body) {
   }
 }
 export function createGithubReleaseClient(options = {}) {
-  const execute = options.run ?? gh;
+  const execute = options.run ?? ((args) => gh(args, options.spawn ?? spawnSync));
   const repository = options.repository ?? process.env.GITHUB_REPOSITORY ?? 'aimansour/Mawjivo';
   if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository))
     throw new Error('GITHUB_RELEASE_REPOSITORY');
@@ -94,6 +94,15 @@ export function createGithubReleaseClient(options = {}) {
         'X-GitHub-Api-Version: 2026-03-10',
       ]),
     publishRelease: async (id, body) => bodyRequest(`${base}/releases/${id}`, 'PATCH', body),
+    deleteAsset: async (id) =>
+      execute([
+        'api',
+        `${base}/releases/assets/${id}`,
+        '--method',
+        'DELETE',
+        '-H',
+        'X-GitHub-Api-Version: 2026-03-10',
+      ]),
   };
 }
 function proofMatches(release, proof) {
@@ -248,6 +257,18 @@ export async function archiveGithubRelease(input, overrides = {}) {
     const assetIds = [];
     for (const asset of assets) {
       let actual = existing.find((item) => item.name === asset.name);
+      if (
+        actual &&
+        archived.draft &&
+        actual.state === 'starter' &&
+        actual.size === 0 &&
+        actual.digest == null &&
+        Number.isSafeInteger(actual.id) &&
+        actual.id > 0
+      ) {
+        await client.deleteAsset(actual.id);
+        actual = null;
+      }
       if (actual && !assetMatches(actual, asset)) throw new Error('GITHUB_RELEASE_ASSET_CONFLICT');
       if (!actual) actual = await client.uploadAsset(archived.id, asset);
       if (!assetMatches(actual, asset)) throw new Error('GITHUB_RELEASE_ASSET_CONFLICT');

@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { XMLParser, XMLBuilder, XMLValidator } from 'fast-xml-parser';
 import { AwsClient } from '../apps/service/node_modules/aws4fetch/dist/aws4fetch.esm.mjs';
@@ -109,7 +109,90 @@ export function createReleaseStore(credentials, options = {}) {
     });
   const publicVerified = new Set();
   let owned = false,
+    inventory = null,
+    lease = null;
+  const lockKey = '_mawjivo-release-lock.json',
+    leaseMs = 15 * 60000;
+  async function readLease() {
+    await verifyOwnership();
+    const response = await signed(location(lockKey));
+    const now = Date.parse(response.headers.get('date') ?? '');
+    if (!Number.isFinite(now)) throw new Error('RELEASE_PUBLICATION_CLOCK');
+    if (response.status === 404) return { value: null, etag: null, now };
+    if (!response.ok) throw new Error('RELEASE_PUBLICATION_LOCK_FAILED');
+    const etag = response.headers.get('etag');
+    const value = JSON.parse(await bounded(response));
+    if (
+      !etag ||
+      value.schemaVersion !== 1 ||
+      typeof value.owner !== 'string' ||
+      !Number.isSafeInteger(value.expiresAt) ||
+      value.expiresAt < 0
+    )
+      throw new Error('RELEASE_PUBLICATION_LOCK_INVALID');
+    return { value, etag, now };
+  }
+  async function writeLease(value, etag) {
+    const response = await signed(location(lockKey), {
+      method: 'PUT',
+      body: JSON.stringify(value) + '\n',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(etag === null ? { 'If-None-Match': '*' } : { 'If-Match': etag }),
+      },
+    });
+    if (response.status === 412) throw new Error('RELEASE_PUBLICATION_BUSY');
+    if (!response.ok || !response.headers.get('etag'))
+      throw new Error('RELEASE_PUBLICATION_LOCK_FAILED');
+    return response.headers.get('etag');
+  }
+  async function guardMutation() {
+    if (!lease) throw new Error('RELEASE_PUBLICATION_LOCK_REQUIRED');
+    const current = await readLease();
+    // Leave more than the maximum five-minute request deadline before expiry.
+    if (
+      current.value?.owner !== lease.owner ||
+      current.etag !== lease.etag ||
+      current.value.expiresAt - current.now <= 6 * 60000
+    )
+      throw new Error('RELEASE_PUBLICATION_LEASE_LOST');
+    lease.etag = await writeLease(
+      { schemaVersion: 1, owner: lease.owner, expiresAt: current.now + leaseMs },
+      current.etag,
+    );
+  }
+  async function withMutationLock(action) {
+    if (lease) throw new Error('RELEASE_PUBLICATION_BUSY');
+    const current = await readLease();
+    if (current.value?.owner && current.value.expiresAt > current.now)
+      throw new Error('RELEASE_PUBLICATION_BUSY');
+    const owner = randomUUID(),
+      value = { schemaVersion: 1, owner, expiresAt: current.now + leaseMs };
+    const objects = await listObjects('');
+    const oldBytes = objects.find((object) => object.key === lockKey)?.bytes ?? 0;
+    if (
+      objects.reduce((sum, object) => sum + object.bytes, 0) -
+        oldBytes +
+        Buffer.byteLength(JSON.stringify(value) + '\n') >
+      CAP
+    )
+      throw new Error('RELEASE_STORAGE_LIMIT');
+    lease = { owner, etag: await writeLease(value, current.etag) };
     inventory = null;
+    try {
+      return await action();
+    } finally {
+      const held = lease;
+      lease = null;
+      // A replaced/expired owner must never clear the newer writer's lease.
+      try {
+        await writeLease({ schemaVersion: 1, owner: '', expiresAt: 0 }, held.etag);
+      } catch (error) {
+        if (error.message !== 'RELEASE_PUBLICATION_BUSY') throw error;
+      }
+      inventory = null;
+    }
+  }
   async function verifyOwnership() {
     if (owned) return;
     const response = await signed(location('_mawjivo-owner.json'));
@@ -189,11 +272,11 @@ export function createReleaseStore(credentials, options = {}) {
     const stored = await signed(location(object.key));
     return { bytes, sha256: await responseHash(stored, bytes), etag: response.headers.get('etag') };
   }
-  async function verifyPublic(object) {
+  async function verifyPublic(object, options = {}) {
     if (object.url !== `https://downloads.aimansour.com/${object.key}`)
       throw new Error('RELEASE_PUBLIC_URL');
     const identity = JSON.stringify([object.key, object.bytes, object.sha256]);
-    if (publicVerified.has(identity)) return;
+    if (!options.fresh && publicVerified.has(identity)) return;
     const response = await publicFetch(object.url, {
       redirect: 'error',
       signal: AbortSignal.timeout(300000),
@@ -225,6 +308,7 @@ export function createReleaseStore(credentials, options = {}) {
     const body = createReadStream(object.path);
     let response;
     try {
+      await guardMutation();
       response = await signed(location(object.key), {
         method: 'PUT',
         body,
@@ -280,6 +364,7 @@ export function createReleaseStore(credentials, options = {}) {
       throw new Error('RELEASE_STORAGE_LIMIT');
     const condition =
       expectedEtag === null ? { 'If-None-Match': '*' } : { 'If-Match': expectedEtag };
+    await guardMutation();
     const response = await signed(location(key), {
       method: 'PUT',
       body,
@@ -328,6 +413,7 @@ export function createReleaseStore(credentials, options = {}) {
       });
       const url = new URL(endpoint);
       url.searchParams.set('delete', '');
+      await guardMutation();
       const response = await signed(url, {
         method: 'POST',
         body,
@@ -361,6 +447,7 @@ export function createReleaseStore(credentials, options = {}) {
     return { deletedKeys, errors };
   }
   return {
+    withMutationLock,
     verifyOwnership,
     listObjects,
     inspect,

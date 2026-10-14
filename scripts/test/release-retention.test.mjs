@@ -114,6 +114,7 @@ test('partial bulk deletion retains failed files in the index and computes actua
   let index = { schemaVersion: 1, records: input.records };
   const deleted = [];
   const store = {
+    withMutationLock: async (action) => action(),
     verifyOwnership: async () => {},
     listObjects: async () => input.objects.filter((object) => !deleted.includes(object.key)),
     readManifest: async (channel) => ({
@@ -144,6 +145,7 @@ test('partial bulk deletion retains failed files in the index and computes actua
 test('index conflict never hides the already confirmed deletions', async () => {
   const input = fixture();
   const store = {
+    withMutationLock: async (action) => action(),
     verifyOwnership: async () => {},
     listObjects: async () => input.objects,
     readManifest: async (channel) => ({
@@ -175,6 +177,7 @@ test('remaining bytes include the updated index size from the actual post-cleanu
     },
   ];
   const store = {
+    withMutationLock: async (action) => action(),
     verifyOwnership: async () => {},
     listObjects: async () => objects,
     readManifest: async (channel) => ({

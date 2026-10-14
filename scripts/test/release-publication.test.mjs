@@ -68,10 +68,11 @@ function control(initial = null) {
   const calls = [];
   return {
     calls,
+    withMutationLock: async (action) => action(),
     verifyOwnership: async () => {},
     verifySignature: async () => calls.push('signature'),
     listObjects: async () => [],
-    inspect: async () => null,
+    inspect: async (object) => ({ bytes: object.bytes, sha256: object.sha256 }),
     upload: async (object) => calls.push('upload:' + object.key),
     verifyPublic: async (object) => calls.push('verify:' + object.key),
     verifyManifest: async () => calls.push('verify-manifest'),
@@ -103,6 +104,7 @@ test('staging verifies the candidate without activating a channel or deleting fi
 test('quota is checked for all missing bytes before any upload and without pre-deletion', async () => {
   const store = control();
   store.listObjects = async () => [{ key: 'media-tools/sources.zip', bytes: 999999900 }];
+  store.inspect = async () => null;
   await assert.rejects(stageRelease(candidate(), store), /RELEASE_STORAGE_LIMIT/);
   assert.ok(!store.calls.some((call) => call.startsWith('upload:')));
 });

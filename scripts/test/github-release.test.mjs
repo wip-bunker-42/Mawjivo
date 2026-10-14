@@ -163,6 +163,51 @@ test('an existing asset with different bytes is refused without clobbering it', 
     await f.close();
   }
 });
+test('a matching draft recovers a zero-byte starter left by a failed GitHub upload', async () => {
+  const f = await fixture();
+  try {
+    f.state.failAt = f.release.name + '.sig';
+    await assert.rejects(archiveGithubRelease(f.input, f.deps));
+    f.state.failAt = null;
+    f.state.assets.push({
+      id: 99,
+      name: f.release.name + '.sig',
+      state: 'starter',
+      size: 0,
+      digest: null,
+    });
+    const deleted = [];
+    f.client.deleteAsset = async (id) => {
+      deleted.push(id);
+      f.state.assets = f.state.assets.filter((asset) => asset.id !== id);
+    };
+    const result = await archiveGithubRelease(f.input, f.deps);
+    assert.deepEqual(deleted, [99]);
+    assert.equal(result.assetIds.length, 4);
+    assert.equal(f.state.release.draft, false);
+    assert.equal(f.state.uploads.filter((name) => name === f.release.name).length, 1);
+  } finally {
+    await f.close();
+  }
+});
+test('starter recovery refuses nonempty assets and already-published releases', async () => {
+  for (const change of [{ size: 1 }, { published: true }]) {
+    const f = await fixture();
+    try {
+      await archiveGithubRelease(f.input, f.deps);
+      if (!change.published) f.state.release.draft = true;
+      Object.assign(f.state.assets[0], { state: 'starter', size: change.size ?? 0, digest: null });
+      let deletes = 0;
+      f.client.deleteAsset = async () => {
+        deletes++;
+      };
+      await assert.rejects(archiveGithubRelease(f.input, f.deps), /GITHUB_RELEASE_ASSET_CONFLICT/);
+      assert.equal(deletes, 0);
+    } finally {
+      await f.close();
+    }
+  }
+});
 test('acceptance archive uses a specific prerelease tag and never production release semantics', async () => {
   const f = await fixture();
   try {
@@ -228,6 +273,19 @@ test('the API client includes drafts in bounded authenticated release listing', 
   const found = await client.getRelease('v0.1.1');
   assert.equal(found?.id, 9);
   assert.ok(calls[0].some((arg) => arg.includes('/releases?per_page=100&page=1')));
+});
+test('deleting a recoverable starter accepts the GitHub empty 204 response', async () => {
+  const calls = [];
+  const client = createGithubReleaseClient({
+    repository: 'aimansour/Mawjivo',
+    spawn: (executable, args) => {
+      calls.push([executable, ...args]);
+      return { status: 0, stdout: '', stderr: '' };
+    },
+  });
+  assert.equal(await client.deleteAsset(99), null);
+  assert.ok(calls[0].includes('repos/aimansour/Mawjivo/releases/assets/99'));
+  assert.ok(calls[0].includes('DELETE'));
 });
 test('Actions never implicitly creates a new tag requiring permanent workflow credentials', async () => {
   const f = await fixture();

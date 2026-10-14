@@ -115,6 +115,9 @@ export function planReleaseCleanup({ objects, records, productionManifest, testM
   };
 }
 export async function cleanupReleases(store, nowMs = Date.now()) {
+  return store.withMutationLock(() => cleanupLocked(store, nowMs));
+}
+async function cleanupLocked(store, nowMs) {
   await store.verifyOwnership();
   const [objects, production, test, index] = await Promise.all([
     store.listObjects(''),

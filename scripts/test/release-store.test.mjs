@@ -5,6 +5,7 @@ import { mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createReleaseStore } from '../release-store.mjs';
+import { releaseR2 } from './helpers/release-r2.mjs';
 
 const bytes = Buffer.from('synthetic installer bytes');
 const digest = createHash('sha256').update(bytes).digest('hex');
@@ -17,12 +18,15 @@ const object = {
   contentType: 'application/octet-stream',
 };
 function fakeStore(options = {}) {
+  const locking = releaseR2();
   const calls = [];
   const publicCalls = [];
   const signedFetch = async (input, init = {}) => {
     const url = new URL(input),
       method = init.method ?? 'GET';
     calls.push({ url, method, headers: new Headers(init.headers), body: init.body });
+    if (url.pathname.endsWith('/_mawjivo-release-lock.json'))
+      return locking.signedFetch(input, init);
     if (url.pathname.endsWith('/_mawjivo-owner.json'))
       return Response.json({
         owner: options.foreign ? 'another-owner' : 'mawjivo-release-store:v1',
@@ -80,7 +84,10 @@ function fakeStore(options = {}) {
     },
     { signedFetch, publicFetch },
   );
-  return { store, calls, publicCalls };
+  const scoped = { ...store };
+  for (const method of ['upload', 'putManifest', 'putIndex', 'deleteObjects'])
+    scoped[method] = (...args) => store.withMutationLock(() => store[method](...args));
+  return { store: scoped, calls, publicCalls };
 }
 async function localObject(run) {
   const directory = await mkdtemp(join(tmpdir(), 'mawjivo-release-object-'));
@@ -102,17 +109,30 @@ test('a foreign ownership marker prevents writes', async () => {
 test('an identical immutable file skips PUT and is verified publicly', async () => {
   const { store, calls } = fakeStore({ exists: true });
   await localObject(async (object) => await store.upload(object));
-  assert.equal(calls.filter((call) => call.method === 'PUT').length, 0);
+  assert.equal(
+    calls.filter((call) => call.method === 'PUT' && call.url.pathname.includes('/releases/'))
+      .length,
+    0,
+  );
 });
 test('different immutable bytes never replace the same key', async () => {
   const { store, calls } = fakeStore({ exists: true, different: true });
   await localObject(async (object) => await assert.rejects(store.upload(object), /IMMUTABLE/));
-  assert.equal(calls.filter((call) => call.method === 'PUT').length, 0);
+  assert.equal(
+    calls.filter((call) => call.method === 'PUT' && call.url.pathname.includes('/releases/'))
+      .length,
+    0,
+  );
 });
 test('an upload uses create-only headers and rejects a conflicting winner', async () => {
   const { store, calls } = fakeStore({ conflict: true });
   await localObject(async (object) => await assert.rejects(store.upload(object), /CONFLICT/));
-  assert.equal(calls.find((call) => call.method === 'PUT').headers.get('if-none-match'), '*');
+  assert.equal(
+    calls
+      .find((call) => call.method === 'PUT' && call.url.pathname.includes('/releases/'))
+      .headers.get('if-none-match'),
+    '*',
+  );
 });
 test('wrong anonymous public bytes prevent successful upload', async () => {
   const { store } = fakeStore({ badPublic: true });
@@ -134,7 +154,15 @@ test('manifest writes use CAS and never bypass a 412', async () => {
     store.putManifest('production', { version: '0.1.1' }, '"old-etag"'),
     /CONFLICT/,
   );
-  assert.equal(calls.find((call) => call.method === 'PUT').headers.get('if-match'), '"old-etag"');
+  assert.equal(
+    calls
+      .find(
+        (call) =>
+          call.method === 'PUT' && call.url.pathname.endsWith('/updates/windows-x86_64.json'),
+      )
+      .headers.get('if-match'),
+    '"old-etag"',
+  );
 });
 test('compressed S3 responses cannot weaken the etag used for a conditional manifest update', async () => {
   const value = { version: '0.1.1' };
@@ -147,7 +175,12 @@ test('compressed S3 responses cannot weaken the etag used for a conditional mani
   await store.putManifest('production', value, current.etag);
   assert.equal(current.etag, '"manifest-etag"');
   assert.equal(
-    calls.find((call) => call.method === 'PUT').headers.get('if-match'),
+    calls
+      .find(
+        (call) =>
+          call.method === 'PUT' && call.url.pathname.endsWith('/updates/windows-x86_64.json'),
+      )
+      .headers.get('if-match'),
     '"manifest-etag"',
   );
 });

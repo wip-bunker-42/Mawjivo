@@ -9,7 +9,7 @@ import { compareVersions } from './release-records.mjs';
 import { hashFile, verifyReleasePackage } from './verify-release.mjs';
 import { startWindowsAcceptanceSession } from './windows-session.mjs';
 
-export async function readAcceptanceProof(path, packageInfo) {
+export async function readAcceptanceProof(path, packageInfo, productionCandidate = true) {
   let proof;
   try {
     proof = JSON.parse(await readFile(path, 'utf8'));
@@ -21,7 +21,7 @@ export async function readAcceptanceProof(path, packageInfo) {
     proof.sourceCommit !== packageInfo.sourceCommit ||
     proof.packageVersion !== packageInfo.version ||
     proof.packageSha256 !== packageInfo.sha256 ||
-    proof.productionCandidate !== true ||
+    proof.productionCandidate !== productionCandidate ||
     proof.publicDownloadVerified !== true ||
     proof.backupCreated !== true ||
     proof.toVersion !== packageInfo.version ||
@@ -352,6 +352,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
     const proof = await readAcceptanceProof(
       process.argv[3],
       JSON.parse(await readFile(join(process.argv[4], 'package-info.json'), 'utf8')),
+      !process.argv.includes('--legacy-replay'),
     );
     console.log(
       JSON.stringify({

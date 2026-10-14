@@ -1,4 +1,13 @@
-import { readFile, writeFile, mkdir, mkdtemp, copyFile, stat, realpath, rm } from 'node:fs/promises';
+import {
+  readFile,
+  writeFile,
+  mkdir,
+  mkdtemp,
+  copyFile,
+  stat,
+  realpath,
+  rm,
+} from 'node:fs/promises';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -99,8 +108,13 @@ export async function buildSignedRelease(
     }
     return result;
   };
-  const commit = check('git', ['rev-parse', 'HEAD']).stdout.trim();
-  if (commit !== sourceCommit) throw new Error('RELEASE_SOURCE_MISMATCH');
+  const checkSource = () => {
+    if (check('git', ['rev-parse', 'HEAD']).stdout.trim() !== sourceCommit)
+      throw new Error('RELEASE_SOURCE_MISMATCH');
+    if (check('git', ['status', '--porcelain=v1', '--untracked-files=normal']).stdout.trim())
+      throw new Error('RELEASE_SOURCE_DIRTY');
+  };
+  checkSource();
   const cli = dependencies.packageManagerPath ?? process.env.npm_execpath;
   const pnpm = (args) => {
     const invocation = packageManagerInvocation(cli, args);
@@ -124,6 +138,7 @@ export async function buildSignedRelease(
   const args = ['tauri:build'];
   if (channel === 'test') args.push('--config', join(root, 'tools/acceptance-tauri.json'));
   pnpm(args);
+  checkSource();
   const isolated = await (dependencies.prepareBundle ?? isolateSignedBundle)({
     bundle: join(root, 'apps/desktop/src-tauri/target/release/bundle/nsis'),
     parent: dirname(resolve(output)),

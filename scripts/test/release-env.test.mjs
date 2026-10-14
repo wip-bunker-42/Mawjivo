@@ -136,6 +136,62 @@ test('the build passes signing material through child env only and verifies the 
     assert.equal(verified.options.channel, 'production');
   });
 });
+test('a matching HEAD with dirty build inputs stops before compilation or packaging', async () => {
+  await withFile(keys, async (envFile) => {
+    const tools = [];
+    await assert.rejects(
+      buildSignedRelease(
+        { envFile, output: 'unused-output', channel: 'production', sourceCommit: 'c'.repeat(40) },
+        {
+          packageManagerPath: '/tools/pnpm.cjs',
+          run: (executable, args) => {
+            tools.push(executable);
+            return {
+              status: 0,
+              stdout: args[0] === 'rev-parse' ? 'c'.repeat(40) : ' M apps/desktop/src/app.tsx\n',
+            };
+          },
+          prepareBundle: async () => ({ directory: '/unused', cleanup: async () => {} }),
+          packageRelease: async () => ({}),
+          verifyPackage: async () => ({}),
+        },
+      ),
+      /RELEASE_SOURCE_DIRTY/,
+    );
+    assert.deepEqual([...new Set(tools)], ['git']);
+  });
+});
+test('source edits during a build cannot be packaged as the initial clean commit', async () => {
+  await withFile(keys, async (envFile) => {
+    let statuses = 0,
+      packaged = false;
+    await assert.rejects(
+      buildSignedRelease(
+        { envFile, output: 'unused-output', channel: 'production', sourceCommit: 'c'.repeat(40) },
+        {
+          packageManagerPath: '/tools/pnpm.cjs',
+          run: (executable, args) => ({
+            status: 0,
+            stdout:
+              args[0] === 'rev-parse'
+                ? 'c'.repeat(40)
+                : args[0] === 'status' && ++statuses > 1
+                  ? '?? apps/desktop/src/new.ts\n'
+                  : '',
+          }),
+          prepareBundle: async () => ({ directory: '/unused', cleanup: async () => {} }),
+          packageRelease: async () => {
+            packaged = true;
+            return {};
+          },
+          verifyPackage: async () => ({}),
+        },
+      ),
+      /RELEASE_SOURCE_DIRTY/,
+    );
+    assert.equal(packaged, false);
+  });
+});
 
 test('a shared output with older installers isolates only the new installer and its signature', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'mawjivo-shared-bundle-'));

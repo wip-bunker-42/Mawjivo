@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import {
   validateAcceptanceVersions,
   requireFreshProductionNamespace,
@@ -49,6 +51,25 @@ test('a successful launcher exit cannot replace missing or incomplete installed-
     }
     await writeFile(path, JSON.stringify(valid));
     assert.equal((await readAcceptanceProof(path, packageInfo)).packageVersion, '0.1.1');
+    await writeFile(path, JSON.stringify({ ...valid, productionCandidate: false }));
+    assert.equal((await readAcceptanceProof(path, packageInfo, false)).productionCandidate, false);
+    await writeFile(join(directory, 'package-info.json'), JSON.stringify(packageInfo));
+    const script = fileURLToPath(new URL('../accept-installed-update.mjs', import.meta.url));
+    const cli = (flags) =>
+      spawnSync(process.execPath, [script, '--verify-proof', path, directory, ...flags], {
+        encoding: 'utf8',
+        windowsHide: true,
+      });
+    assert.equal(cli([]).status, 1);
+    const legacy = cli(['--legacy-replay']);
+    assert.equal(legacy.status, 0, legacy.stderr);
+    assert.equal(JSON.parse(legacy.stdout).verified, true);
+    await writeFile(
+      path,
+      JSON.stringify({ ...valid, productionCandidate: false, vaultPreserved: false }),
+    );
+    await assert.rejects(readAcceptanceProof(path, packageInfo, false), /ACCEPTANCE_UNPROVEN/);
+    assert.equal(cli(['--legacy-replay']).status, 1);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
