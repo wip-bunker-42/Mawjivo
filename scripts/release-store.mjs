@@ -99,6 +99,12 @@ export function createReleaseStore(credentials, options = {}) {
   const signed = (url, init = {}) =>
     signedFetch(url, {
       ...init,
+      // Cloudflare compression weakens response ETags. Preserve the original
+      // representation so If-Match remains a real compare-and-swap condition.
+      headers: new Headers({
+        ...Object.fromEntries(new Headers(init.headers)),
+        'Accept-Encoding': 'identity',
+      }),
       signal: AbortSignal.timeout(init.method === 'PUT' ? 300000 : 60000),
     });
   const publicVerified = new Set();

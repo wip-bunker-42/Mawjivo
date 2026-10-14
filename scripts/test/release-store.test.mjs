@@ -43,14 +43,29 @@ function fakeStore(options = {}) {
         : new Response(null, { status: 404 });
     if (method === 'PUT')
       return new Response(null, {
-        status: options.conflict ? 412 : 200,
+        status:
+          options.conflict ||
+          (options.compareEtag && new Headers(init.headers).get('if-match') !== '"manifest-etag"')
+            ? 412
+            : 200,
         headers: { etag: '"new-etag"' },
       });
     if (method === 'POST' && url.searchParams.has('delete')) return new Response(options.deleteXml);
     if (url.pathname.endsWith('/updates/windows-x86_64.json'))
       return options.absent
         ? new Response(null, { status: 404 })
-        : Response.json({ version: '0.1.0' }, { headers: { etag: '"manifest-etag"' } });
+        : Response.json(
+            { version: '0.1.0' },
+            {
+              headers: {
+                etag:
+                  options.compressed &&
+                  new Headers(init.headers).get('accept-encoding') !== 'identity'
+                    ? 'W/"manifest-etag"'
+                    : '"manifest-etag"',
+              },
+            },
+          );
     return new Response(null, { status: 404 });
   };
   const publicFetch = async (...args) => {
@@ -120,6 +135,21 @@ test('manifest writes use CAS and never bypass a 412', async () => {
     /CONFLICT/,
   );
   assert.equal(calls.find((call) => call.method === 'PUT').headers.get('if-match'), '"old-etag"');
+});
+test('compressed S3 responses cannot weaken the etag used for a conditional manifest update', async () => {
+  const value = { version: '0.1.1' };
+  const { store, calls } = fakeStore({
+    compressed: true,
+    compareEtag: true,
+    publicBody: JSON.stringify(value, null, 2) + '\n',
+  });
+  const current = await store.readManifest('production');
+  await store.putManifest('production', value, current.etag);
+  assert.equal(current.etag, '"manifest-etag"');
+  assert.equal(
+    calls.find((call) => call.method === 'PUT').headers.get('if-match'),
+    '"manifest-etag"',
+  );
 });
 test('list reads decode escaped object keys exactly once and reject duplicate keys', async () => {
   const contents =
