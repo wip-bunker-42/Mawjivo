@@ -72,6 +72,10 @@ test('empty_install_exposes_transfer_and_two_native_buttons_in_tab_order', async
     name: 'استيراد الإعدادات والحسابات',
     exact: true,
   });
+  const exportBounds = (await exportButton.boundingBox())!;
+  const importBounds = (await importButton.boundingBox())!;
+  expect(importBounds.y).toBeGreaterThanOrEqual(exportBounds.y + exportBounds.height);
+  expect(Math.abs(importBounds.x - exportBounds.x)).toBeLessThan(1);
   await exportButton.focus();
   await page.keyboard.press('Tab');
   await expect(importButton).toBeFocused();

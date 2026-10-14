@@ -129,6 +129,12 @@ h3 {
   gap: 0.7rem;
   margin-block-end: 1.5rem;
 }
+.transfer-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  max-inline-size: 32rem;
+}
 fieldset {
   border: 1px solid #63758a;
   border-radius: 8px;

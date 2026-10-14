@@ -2,14 +2,15 @@ use super::{CloudflareTransferSource, TransferSummary, export_to, import_from};
 use crate::{
     commands::NativeState, contracts::AppError, updates::OperationGate, vault::SystemVault,
 };
-use tauri::{AppHandle, State};
+use tauri::{State, Window};
 use tauri_plugin_dialog::DialogExt;
 
-async fn choose_file(app: AppHandle, export: bool) -> Result<Option<std::path::PathBuf>, AppError> {
+async fn choose_file(window: Window, export: bool) -> Result<Option<std::path::PathBuf>, AppError> {
     let selected = tauri::async_runtime::spawn_blocking(move || {
-        let picker = app
+        let picker = window
             .dialog()
             .file()
+            .set_parent(&window)
             .add_filter("ملف إعدادات Mawjivo", &["env"]);
         if export {
             picker
@@ -34,13 +35,13 @@ async fn choose_file(app: AppHandle, export: bool) -> Result<Option<std::path::P
 
 #[tauri::command]
 pub async fn export_settings(
-    app: AppHandle,
+    window: Window,
     state: State<'_, NativeState>,
     gate: State<'_, OperationGate>,
 ) -> Result<Option<TransferSummary>, AppError> {
     let _work = gate.work()?;
     let _guard = state.setup_lock.lock().await;
-    let Some(path) = choose_file(app, true).await? else {
+    let Some(path) = choose_file(window, true).await? else {
         return Ok(None);
     };
     Ok(Some(
@@ -50,13 +51,13 @@ pub async fn export_settings(
 
 #[tauri::command]
 pub async fn import_settings(
-    app: AppHandle,
+    window: Window,
     state: State<'_, NativeState>,
     gate: State<'_, OperationGate>,
 ) -> Result<Option<TransferSummary>, AppError> {
     let _work = gate.work()?;
     let _guard = state.setup_lock.lock().await;
-    let Some(path) = choose_file(app, false).await? else {
+    let Some(path) = choose_file(window, false).await? else {
         return Ok(None);
     };
     let (summary, _) =

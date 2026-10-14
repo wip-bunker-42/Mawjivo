@@ -302,6 +302,25 @@ export async function acceptInstalledUpdate({
       await request(`/session/${active.sessionId}/element/${restored}/property/value`),
       text,
     );
+    mark('native-settings-dialogs');
+    const dialogs = spawnSync(
+      'powershell.exe',
+      [
+        '-NoProfile',
+        '-File',
+        resolve('scripts/accept-settings-dialogs.ps1'),
+        '-ApplicationPath',
+        app,
+        '-OutputPath',
+        resolve(output, 'transfer-dialog-proof.json'),
+      ],
+      { windowsHide: true, encoding: 'utf8', timeout: 120000 },
+    );
+    assert.equal(
+      dialogs.status,
+      0,
+      'Actual native settings file dialogs failed: ' + dialogs.stderr,
+    );
     const proof = makeAcceptanceProof(
       next,
       { installed: await hashFile(app), reference: expectedBinaryHash },
