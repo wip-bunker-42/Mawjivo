@@ -42,7 +42,7 @@ async function bodyRequest(endpoint, method, body) {
 }
 export function createGithubReleaseClient(options = {}) {
   const execute = options.run ?? ((args) => gh(args, options.spawn ?? spawnSync));
-  const repository = options.repository ?? process.env.GITHUB_REPOSITORY ?? 'aimansour/Mawjivo';
+  const repository = options.repository ?? process.env.GITHUB_REPOSITORY ?? 'wip-bunker-42/Mawjivo';
   if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository))
     throw new Error('GITHUB_RELEASE_REPOSITORY');
   const base = `repos/${repository}`;
@@ -192,8 +192,8 @@ export async function archiveGithubRelease(input, overrides = {}) {
   )
     throw new Error('GITHUB_RELEASE_INPUT');
   const client = dependencies.client;
-  if ((await client.repository())?.private !== true)
-    throw new Error('GITHUB_RELEASE_PRIVATE_REQUIRED');
+  if (typeof (await client.repository())?.private !== 'boolean')
+    throw new Error('GITHUB_RELEASE_API_FAILED');
   const tagCommit = await client.resolveTag(tag);
   if (dependencies.isActions && !tagCommit) throw new Error('GITHUB_RELEASE_EXISTING_TAG_REQUIRED');
   if (tagCommit && tagCommit !== sourceCommit) throw new Error('GITHUB_RELEASE_SOURCE_CONFLICT');

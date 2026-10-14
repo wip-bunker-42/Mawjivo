@@ -226,16 +226,30 @@ test('acceptance archive uses a specific prerelease tag and never production rel
     await f.close();
   }
 });
-test('public repositories and a tag resolving to a different commit are refused', async () => {
+test('an explicitly public repository archives only the proven signed package and safe proof', async () => {
   const f = await fixture();
   try {
+    const result = await archiveGithubRelease(f.input, {
+      ...f.deps,
+      client: { ...f.client, repository: async () => ({ private: false }) },
+    });
+    assert.equal(result.assetIds.length, 4);
+    assert.equal(f.state.published, 1);
+    assert.ok(!f.state.uploads.some((name) => name.endsWith('.secrets.env')));
     await assert.rejects(
       archiveGithubRelease(f.input, {
         ...f.deps,
-        client: { ...f.client, repository: async () => ({ private: false }) },
+        client: { ...f.client, repository: async () => ({}) },
       }),
-      /GITHUB_RELEASE_PRIVATE_REQUIRED/,
+      /GITHUB_RELEASE_API_FAILED/,
     );
+  } finally {
+    await f.close();
+  }
+});
+test('a tag resolving to a different commit is refused regardless of repository visibility', async () => {
+  const f = await fixture();
+  try {
     await assert.rejects(
       archiveGithubRelease(f.input, {
         ...f.deps,
