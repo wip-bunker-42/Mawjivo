@@ -7,8 +7,52 @@ import {
   validateAcceptanceVersions,
   requireFreshProductionNamespace,
   makeAcceptanceProof,
+  readAcceptanceProof,
 } from '../accept-installed-update.mjs';
 const sourceCommit = 'a'.repeat(40);
+test('a successful launcher exit cannot replace missing or incomplete installed-update evidence', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'mawjivo-proof-gate-'));
+  const packageInfo = { version: '0.1.1', sourceCommit, sha256: 'c'.repeat(64) };
+  try {
+    const path = join(directory, 'acceptance-proof.json');
+    await assert.rejects(readAcceptanceProof(path, packageInfo), /ACCEPTANCE_PROOF_MISSING/);
+    const valid = {
+      sourceCommit,
+      packageVersion: '0.1.1',
+      packageSha256: 'c'.repeat(64),
+      installedBinarySha256: 'd'.repeat(64),
+      referenceBinarySha256: 'd'.repeat(64),
+      cleanInstall: true,
+      signedUpdateVerified: true,
+      profilePreserved: true,
+      draftPreserved: true,
+      vaultPreserved: true,
+      publicDownloadVerified: true,
+      backupCreated: true,
+      productionCandidate: true,
+      fromVersion: '0.1.0',
+      toVersion: '0.1.1',
+    };
+    for (const change of [
+      { vaultPreserved: false },
+      { sourceCommit: 'b'.repeat(40) },
+      { packageSha256: 'e'.repeat(64) },
+      { referenceBinarySha256: 'e'.repeat(64) },
+      { productionCandidate: false },
+      { backupCreated: false },
+    ]) {
+      await writeFile(path, JSON.stringify({ ...valid, ...change }));
+      await assert.rejects(
+        readAcceptanceProof(path, packageInfo),
+        /ACCEPTANCE_UNPROVEN|ACCEPTANCE_BINARY_MISMATCH/,
+      );
+    }
+    await writeFile(path, JSON.stringify(valid));
+    assert.equal((await readAcceptanceProof(path, packageInfo)).packageVersion, '0.1.1');
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
 test('acceptance works for later version pairs and rejects equal, older or foreign source inputs', () => {
   assert.doesNotThrow(() =>
     validateAcceptanceVersions(

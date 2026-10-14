@@ -270,7 +270,9 @@ jobs:
         run: |
           $taskFlags = @()
           if ('${{ inputs.replay_run }}' -eq '' -or '${{ inputs.production_candidate_replay }}' -eq 'true') { $taskFlags += '--production-candidate' }
-          & $env:MAWJIVO_TEST_LAUNCHER --integrity Medium node scripts/accept-installed-update.mjs .tools/acceptance-base .tools/acceptance-next .tools/tauri-driver/bin/tauri-driver.exe .tools/edge-driver/msedgedriver.exe .tools/installed-acceptance @taskFlags
+          & $env:MAWJIVO_TEST_LAUNCHER --integrity Medium --direct --wait --debug node scripts/accept-installed-update.mjs .tools/acceptance-base .tools/acceptance-next .tools/tauri-driver/bin/tauri-driver.exe .tools/edge-driver/msedgedriver.exe .tools/installed-acceptance @taskFlags
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/accept-installed-update.mjs --verify-proof .tools/installed-acceptance/acceptance-proof.json .tools/acceptance-next
           exit $LASTEXITCODE
       - name: Diagnose the previous real WebView startup failure
         if: inputs.diagnostics_only == true && inputs.replay_run != ''
@@ -295,6 +297,8 @@ jobs:
             .tools/installed-acceptance/standalone-startup.json
             .tools/installed-acceptance/managed-app.json
             .tools/installed-acceptance/session-failure.json
+            .tools/installed-acceptance/process-exit.json
+            .tools/installed-acceptance/before-install-diagnostics.json
             apps/desktop/src-tauri/target/release/verify_update.exe
             apps/desktop/src-tauri/target/release/acceptance_data.exe
             apps/desktop/src-tauri/target/release/setup.exe

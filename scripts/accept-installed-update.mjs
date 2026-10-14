@@ -1,4 +1,5 @@
 import { spawnSync } from 'node:child_process';
+import { writeFileSync } from 'node:fs';
 import { readFile, writeFile, mkdir, readdir } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { createHash } from 'node:crypto';
@@ -7,6 +8,36 @@ import assert from 'node:assert/strict';
 import { compareVersions } from './release-records.mjs';
 import { hashFile, verifyReleasePackage } from './verify-release.mjs';
 import { startWindowsAcceptanceSession } from './windows-session.mjs';
+
+export async function readAcceptanceProof(path, packageInfo) {
+  let proof;
+  try {
+    proof = JSON.parse(await readFile(path, 'utf8'));
+  } catch {
+    throw new Error('ACCEPTANCE_PROOF_MISSING');
+  }
+  if (
+    !proof ||
+    proof.sourceCommit !== packageInfo.sourceCommit ||
+    proof.packageVersion !== packageInfo.version ||
+    proof.packageSha256 !== packageInfo.sha256 ||
+    proof.productionCandidate !== true ||
+    proof.publicDownloadVerified !== true ||
+    proof.backupCreated !== true ||
+    proof.toVersion !== packageInfo.version ||
+    compareVersions(proof.fromVersion, proof.toVersion) >= 0
+  )
+    throw new Error('ACCEPTANCE_UNPROVEN');
+  makeAcceptanceProof(
+    packageInfo,
+    {
+      installed: proof.installedBinarySha256,
+      reference: proof.referenceBinarySha256,
+    },
+    proof,
+  );
+  return proof;
+}
 
 export function validateAcceptanceVersions(base, next) {
   try {
@@ -127,6 +158,12 @@ export async function acceptInstalledUpdate({
     stage = value;
     console.log('Acceptance stage: ' + value);
   };
+  const exitDiagnostic = (code) => {
+    try {
+      writeFileSync(join(output, 'process-exit.json'), JSON.stringify({ code, stage }));
+    } catch {}
+  };
+  process.on('exit', exitDiagnostic);
   const request = (...args) => active.request(...args);
   const element = (xpath) =>
     request(`/session/${active.sessionId}/element`, 'POST', { using: 'xpath', value: xpath }).then(
@@ -307,17 +344,33 @@ export async function acceptInstalledUpdate({
     throw error;
   } finally {
     await active?.close();
+    process.removeListener('exit', exitDiagnostic);
   }
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
-  const [basePackage, nextPackage, driverPath, edgeDriverPath, output, ...flags] =
-    process.argv.slice(2);
-  await acceptInstalledUpdate({
-    basePackage,
-    nextPackage,
-    driverPath,
-    edgeDriverPath,
-    output,
-    productionCandidate: flags.includes('--production-candidate'),
-  });
+  if (process.argv[2] === '--verify-proof') {
+    const proof = await readAcceptanceProof(
+      process.argv[3],
+      JSON.parse(await readFile(join(process.argv[4], 'package-info.json'), 'utf8')),
+    );
+    console.log(
+      JSON.stringify({
+        verified: true,
+        sourceCommit: proof.sourceCommit,
+        packageVersion: proof.packageVersion,
+        packageSha256: proof.packageSha256,
+      }),
+    );
+  } else {
+    const [basePackage, nextPackage, driverPath, edgeDriverPath, output, ...flags] =
+      process.argv.slice(2);
+    await acceptInstalledUpdate({
+      basePackage,
+      nextPackage,
+      driverPath,
+      edgeDriverPath,
+      output,
+      productionCandidate: flags.includes('--production-candidate'),
+    });
+  }
 }
