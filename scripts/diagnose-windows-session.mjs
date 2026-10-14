@@ -1,7 +1,7 @@
 import { spawn, spawnSync } from 'node:child_process';
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
-const [basePackage, output] = process.argv.slice(2);
+const [basePackage, output, expectation] = process.argv.slice(2);
 if (process.platform !== 'win32' || !output || process.env.GITHUB_ACTIONS !== 'true')
   throw new Error('WINDOWS_CI_DIAGNOSTIC_ONLY');
 await mkdir(output, { recursive: true });
@@ -48,7 +48,8 @@ try {
     $taskProcesses = @(Get-CimInstance Win32_Process | Where-Object { $_.Name -in @('mawjivo.exe','msedgewebview2.exe','msedgedriver.exe','tauri-driver.exe') } | Select-Object Name,ProcessId,ParentProcessId,SessionId,ExecutablePath,CommandLine);
     $taskConnections = @(Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | Where-Object { $_.LocalPort -eq 9222 -or $_.OwningProcess -in $taskProcesses.ProcessId } | Select-Object LocalAddress,LocalPort,OwningProcess);
     $taskPolicies = @('HKLM:\\SOFTWARE\\Policies\\Microsoft\\Edge','HKCU:\\SOFTWARE\\Policies\\Microsoft\\Edge') | ForEach-Object { Get-ItemProperty -LiteralPath $_ -Name RemoteDebuggingAllowed -ErrorAction SilentlyContinue | Select-Object RemoteDebuggingAllowed };
-    @{processes=$taskProcesses;connections=$taskConnections;policies=@($taskPolicies);userDataDirectory=$env:LOCALAPPDATA;runtimeDirectory=$env:WEBVIEW2_BROWSER_EXECUTABLE_FOLDER;inheritedWebviewArgs=$env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS} | ConvertTo-Json -Depth 6
+    $taskElevated = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator);
+    @{elevated=$taskElevated;processes=$taskProcesses;connections=$taskConnections;policies=@($taskPolicies);userDataDirectory=$env:LOCALAPPDATA;runtimeDirectory=$env:WEBVIEW2_BROWSER_EXECUTABLE_FOLDER;inheritedWebviewArgs=$env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS} | ConvertTo-Json -Depth 6
   `;
   const diagnostics = spawnSync(
     'powershell.exe',
@@ -61,6 +62,7 @@ try {
   );
   await writeFile(join(output, 'environment.json'), diagnostics.stdout || '{}');
   console.log('DIAGNOSTIC_WEBVIEW_READY: ' + ready + '; childExitCode: ' + child.exitCode);
+  if (expectation === '--expect-ready' && !ready) throw new Error('DIAGNOSTIC_WEBVIEW_NOT_READY');
 } finally {
   child.kill();
 }

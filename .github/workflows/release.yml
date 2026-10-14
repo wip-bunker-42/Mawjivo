@@ -186,6 +186,18 @@ jobs:
           Expand-Archive -LiteralPath .tools/edge-driver.zip -DestinationPath .tools/edge-driver -Force
           $taskDriverVersion = & .tools/edge-driver/msedgedriver.exe --version
           if ($taskDriverVersion -notmatch [regex]::Escape($taskVersion)) { throw 'Edge driver mismatch.' }
+      # Runtime 150+ ignores WEBVIEW2_* overrides in elevated hosts. Test with
+      # the runner user's medium token, as the actual current-user app runs.
+      # No registry/security policy changes or app debugging code are needed.
+      - name: Prepare pinned medium-integrity test launcher
+        shell: pwsh
+        run: |
+          Invoke-WebRequest 'https://github.com/gerardog/gsudo/releases/download/v2.6.1/gsudo.portable.zip' -OutFile .tools/gsudo.zip
+          if ((Get-FileHash .tools/gsudo.zip -Algorithm SHA256).Hash.ToLowerInvariant() -ne '21130bf178d7b9891207f00bff56f05b6b363ce9cec7b2d084e45fb12ee51f44') { throw 'gsudo digest mismatch.' }
+          Expand-Archive -LiteralPath .tools/gsudo.zip -DestinationPath .tools/gsudo -Force
+          $taskLauncher = (Get-ChildItem .tools/gsudo -Filter gsudo.exe -Recurse | Where-Object { $_.Directory.Name -eq 'x64' } | Select-Object -First 1).FullName
+          if (!$taskLauncher -or (Get-AuthenticodeSignature -LiteralPath $taskLauncher).Status -ne 'Valid') { throw 'Signed test launcher missing.' }
+          "MAWJIVO_TEST_LAUNCHER=$taskLauncher" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
       - name: Prove actual install and signed in-app update with Windows vault
         if: inputs.diagnostics_only != true
         shell: pwsh
@@ -193,11 +205,15 @@ jobs:
           MAWJIVO_ACCEPTANCE_FIXTURE_URL: ${{ vars.MAWJIVO_ACCEPTANCE_FIXTURE_URL }}
           MAWJIVO_ACCEPTANCE_DIRECT_DRIVER: ${{ inputs.replay_run != '' }}
           MAWJIVO_ACCEPTANCE_ATTACH_DRIVER: 'true'
-        run: node scripts/accept-installed-update.mjs .tools/acceptance-base .tools/acceptance-next .tools/tauri-driver/bin/tauri-driver.exe .tools/edge-driver/msedgedriver.exe .tools/installed-acceptance
+        run: |
+          & $env:MAWJIVO_TEST_LAUNCHER --integrity Medium node scripts/accept-installed-update.mjs .tools/acceptance-base .tools/acceptance-next .tools/tauri-driver/bin/tauri-driver.exe .tools/edge-driver/msedgedriver.exe .tools/installed-acceptance
+          exit $LASTEXITCODE
       - name: Diagnose the previous real WebView startup failure
         if: inputs.diagnostics_only == true && inputs.replay_run != ''
         shell: pwsh
-        run: node scripts/diagnose-windows-session.mjs .tools/acceptance-base .tools/session-diagnostics
+        run: |
+          & $env:MAWJIVO_TEST_LAUNCHER --integrity Medium node scripts/diagnose-windows-session.mjs .tools/acceptance-base .tools/session-diagnostics --expect-ready
+          exit $LASTEXITCODE
       - name: Retain concrete acceptance evidence and installers
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
