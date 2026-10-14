@@ -302,6 +302,14 @@ export function createReleaseStore(credentials, options = {}) {
     }
     return { etag: response.headers.get('etag') };
   }
+  async function verifyManifest(channel, value) {
+    const response = await publicFetch('https://downloads.aimansour.com/' + manifestKey(channel), {
+      redirect: 'error',
+      signal: AbortSignal.timeout(60000),
+    });
+    if (!response.ok || (await bounded(response)) !== JSON.stringify(value, null, 2) + '\n')
+      throw new Error('RELEASE_MANIFEST_PUBLIC_CHECK');
+  }
   async function deleteObjects(keys) {
     await verifyOwnership();
     if (
@@ -360,6 +368,7 @@ export function createReleaseStore(credentials, options = {}) {
     verifyPublic,
     readManifest: (channel) => readJson(manifestKey(channel)),
     putManifest: (channel, value, etag) => putJson(manifestKey(channel), value, etag, true),
+    verifyManifest,
     readIndex: () => readJson('_mawjivo-release-index.json'),
     putIndex: (value, etag) => putJson('_mawjivo-release-index.json', value, etag, false),
     deleteObjects,

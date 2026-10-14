@@ -155,8 +155,12 @@ export async function acceptInstalledUpdate({
       };
       @{processes=$taskProcesses;registry=@($taskRegistry)} | ConvertTo-Json -Depth 5
     `;
-    const result=spawnSync('powershell.exe',['-NoProfile','-EncodedCommand',Buffer.from(script,'utf16le').toString('base64')],{encoding:'utf8',windowsHide:true,timeout:15000,maxBuffer:1048576});
-    return result.status===0?result.stdout:JSON.stringify({unavailable:true});
+    const result = spawnSync(
+      'powershell.exe',
+      ['-NoProfile', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')],
+      { encoding: 'utf8', windowsHide: true, timeout: 15000, maxBuffer: 1048576 },
+    );
+    return result.status === 0 ? result.stdout : JSON.stringify({ unavailable: true });
   }
   const open = async () => {
     active = await startWindowsAcceptanceSession({
@@ -225,7 +229,7 @@ export async function acceptInstalledUpdate({
     await click('تنزيل التحديث');
     await visibleText('تم التحقق من التحديث. يمكنك تثبيته الآن.');
     mark('install-update');
-    await writeFile(join(output,'before-install-diagnostics.json'),installerDiagnostics());
+    await writeFile(join(output, 'before-install-diagnostics.json'), installerDiagnostics());
     await click('تثبيت التحديث').catch((error) => {
       if (
         !/disconnected|invalid session|no such window|target window|connection/i.test(error.message)
@@ -285,7 +289,9 @@ export async function acceptInstalledUpdate({
     );
     return proof;
   } catch (error) {
-    await writeFile(join(output,'native-diagnostics.json'),installerDiagnostics()).catch(()=>{});
+    await writeFile(join(output, 'native-diagnostics.json'), installerDiagnostics()).catch(
+      () => {},
+    );
     await writeFile(
       join(output, 'failure.json'),
       JSON.stringify({ stage, error: error.message }, null, 2) + '\n',

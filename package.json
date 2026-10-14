@@ -1,6 +1,6 @@
 {
   "name": "mawjivo",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "packageManager": "pnpm@12.11.2",
   "engines": {
@@ -23,7 +23,10 @@
     "check:secrets": "node scripts/check-secrets.mjs",
     "sync-version": "node scripts/sync-version.mjs",
     "test:scripts": "node --test scripts/test/*.test.mjs",
-    "notices": "node scripts/generate-notices.mjs"
+    "notices": "node scripts/generate-notices.mjs",
+    "release:archive": "node scripts/github-release.mjs",
+    "release:publish": "node scripts/publish-release.mjs",
+    "release:cleanup": "node scripts/publish-release.mjs --cleanup"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.13.0",

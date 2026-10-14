@@ -7,6 +7,7 @@ import { loadReleaseEnv } from './release-env.mjs';
 import { packageManagerInvocation } from './package-manager.mjs';
 import { packageWindowsRelease } from './package-windows-release.mjs';
 import { verifyReleasePackage } from './verify-release.mjs';
+import { stableVersion } from './release-records.mjs';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 export async function isolateSignedBundle({ bundle, parent, name, afterMs }) {
@@ -163,8 +164,84 @@ async function cli() {
   process.stdout.write(JSON.stringify(metadata) + '\n');
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
-  cli().catch((error) => {
+  (async () => {
+    if (process.argv[2] !== '--workflow-inputs') return cli();
+    const pkg = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'));
+    const inputs = JSON.parse(process.env.MAWJIVO_WORKFLOW_INPUTS ?? '{}');
+    const result = releaseWorkflowInputs({
+      eventName: process.env.GITHUB_EVENT_NAME,
+      ref: process.env.GITHUB_REF,
+      inputs,
+      projectVersion: pkg.version,
+      sourceCommit: process.env.GITHUB_SHA,
+      defaultBranch: process.env.MAWJIVO_DEFAULT_BRANCH,
+    });
+    if (process.env.GITHUB_OUTPUT)
+      await writeFile(
+        process.env.GITHUB_OUTPUT,
+        Object.entries(result)
+          .map(([key, value]) => `${key}=${value}\n`)
+          .join(''),
+        { flag: 'a' },
+      );
+    console.log(JSON.stringify(result));
+  })().catch((error) => {
     process.stderr.write((error instanceof Error ? error.message : 'RELEASE_BUILD_FAILED') + '\n');
     process.exitCode = 1;
   });
+}
+export function releaseWorkflowInputs({
+  eventName,
+  ref,
+  inputs = {},
+  projectVersion,
+  sourceCommit,
+  defaultBranch,
+}) {
+  if (!/^[a-f0-9]{40}$/.test(sourceCommit ?? '')) throw new Error('RELEASE_WORKFLOW_INPUT');
+  let parts;
+  try {
+    parts = stableVersion(projectVersion);
+  } catch {
+    throw new Error('RELEASE_WORKFLOW_INPUT');
+  }
+  let mode;
+  if (eventName === 'schedule') {
+    if (ref !== `refs/heads/${defaultBranch}`) throw new Error('RELEASE_WORKFLOW_INPUT');
+    mode = 'cleanup';
+  } else if (eventName === 'push') {
+    if (ref !== `refs/tags/v${projectVersion}`) throw new Error('RELEASE_WORKFLOW_INPUT');
+    mode = 'production';
+  } else if (eventName === 'workflow_dispatch') {
+    if (inputs.replay_run) {
+      if (!/^\d{1,20}$/.test(inputs.replay_run)) throw new Error('RELEASE_WORKFLOW_INPUT');
+      mode = 'replay';
+    } else mode = inputs.mode ?? 'acceptance';
+  } else throw new Error('RELEASE_WORKFLOW_INPUT');
+  if (!['production', 'acceptance', 'cleanup', 'replay'].includes(mode))
+    throw new Error('RELEASE_WORKFLOW_INPUT');
+  if (
+    !inputs.replay_run &&
+    (mode === 'replay' ||
+      inputs.diagnostics_only === true ||
+      inputs.production_candidate_replay === true)
+  )
+    throw new Error('RELEASE_WORKFLOW_INPUT');
+  const tag =
+    mode === 'production'
+      ? `v${projectVersion}`
+      : mode === 'acceptance'
+        ? `acceptance-v${projectVersion}-${sourceCommit.slice(0, 8)}`
+        : '';
+  if (tag && ref !== `refs/tags/${tag}`) throw new Error('RELEASE_WORKFLOW_INPUT');
+  let baselineVersion = '';
+  if (tag) {
+    const previous = [...parts];
+    if (previous[2] > 0) previous[2]--;
+    else if (previous[1] > 0) previous[1]--;
+    else if (previous[0] > 0) previous[0]--;
+    else throw new Error('RELEASE_WORKFLOW_INPUT');
+    baselineVersion = previous.join('.');
+  }
+  return { mode, tag, version: projectVersion, baselineVersion };
 }

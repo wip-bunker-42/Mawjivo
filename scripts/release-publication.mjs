@@ -95,6 +95,7 @@ export async function activateRelease(staged, proof, store) {
   if (release.channel === 'production') next = recordRelease(records, release, Date.now());
   if (JSON.stringify(current.value) !== JSON.stringify(release.manifest))
     await store.putManifest(release.channel, release.manifest, current.etag);
+  else await store.verifyManifest(release.channel, release.manifest);
   if (release.channel === 'production') await store.putIndex(next, index.etag);
   let cleanup;
   try {

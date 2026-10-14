@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Mawjivo",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "identifier": "com.aimansour.mawjivo",
   "build": {
     "beforeDevCommand": "pnpm dev",
@@ -36,8 +36,8 @@
     "windows": {
       "nsis": {
         "installMode": "currentUser",
-        "languages": ["Arabic", "English"],
-        "displayLanguageSelector": true
+        "languages": ["Arabic"],
+        "displayLanguageSelector": false
       },
       "webviewInstallMode": {
         "type": "downloadBootstrapper"

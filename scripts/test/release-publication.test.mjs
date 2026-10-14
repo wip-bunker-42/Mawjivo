@@ -74,6 +74,7 @@ function control(initial = null) {
     inspect: async () => null,
     upload: async (object) => calls.push('upload:' + object.key),
     verifyPublic: async (object) => calls.push('verify:' + object.key),
+    verifyManifest: async () => calls.push('verify-manifest'),
     readManifest: async () => ({ value: active, etag: active ? '"active"' : null }),
     putManifest: async (channel, value, etag) => {
       calls.push('manifest');
@@ -131,6 +132,22 @@ test('a concurrent manifest CAS change prevents index updates and cleanup', asyn
       store,
     ),
     /RELEASE_PUBLICATION_CONFLICT/,
+  );
+  assert.ok(!store.calls.includes('index'));
+});
+test('an unchanged manifest must still be anonymously verified before index updates or cleanup', async () => {
+  const release = candidate(),
+    store = control(release.manifest);
+  store.verifyManifest = async () => {
+    throw new Error('RELEASE_MANIFEST_PUBLIC_CHECK');
+  };
+  await assert.rejects(
+    activateRelease(
+      { release, verifiedObjectKeys: release.objects.map((object) => object.key) },
+      proof(release),
+      store,
+    ),
+    /RELEASE_MANIFEST_PUBLIC_CHECK/,
   );
   assert.ok(!store.calls.includes('index'));
 });
