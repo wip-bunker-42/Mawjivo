@@ -139,6 +139,25 @@ export async function acceptInstalledUpdate({
   const visibleText = (text) =>
     waitFor(() => element(`//*[self::p or self::bdi][normalize-space(.)='${text}']`));
   const installedDirectory = resolve(output, 'installed');
+  function installerDiagnostics() {
+    const script = `
+      $taskProcesses = @(Get-CimInstance Win32_Process | Where-Object { $_.Name -in @('mawjivo.exe','msedgedriver.exe') -or $_.ExecutablePath -match 'Mawjivo-.+-(updater|installer)' } | ForEach-Object {
+        $taskWindow = Get-Process -Id $_.ProcessId -ErrorAction SilentlyContinue;
+        [pscustomobject]@{Name=$_.Name;ProcessId=$_.ProcessId;ExecutablePath=$_.ExecutablePath;CommandLine=$_.CommandLine;WindowTitle=$taskWindow.MainWindowTitle}
+      });
+      $taskRegistry = @('Registry32','Registry64') | ForEach-Object {
+        $taskView = [Microsoft.Win32.RegistryView]::$_;
+        $taskHive = [Microsoft.Win32.RegistryKey]::OpenBaseKey([Microsoft.Win32.RegistryHive]::CurrentUser,$taskView);
+        $taskProduct = $taskHive.OpenSubKey('Software\\Mawjivo\\Mawjivo');
+        $taskUninstall = $taskHive.OpenSubKey('Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Mawjivo');
+        [pscustomobject]@{View=$_;ProductDirectory=if($taskProduct){$taskProduct.GetValue('')};InstallerLanguage=if($taskProduct){$taskProduct.GetValue('Installer Language')};InstallLocation=if($taskUninstall){$taskUninstall.GetValue('InstallLocation')};Version=if($taskUninstall){$taskUninstall.GetValue('DisplayVersion')}};
+        if($taskProduct){$taskProduct.Dispose()};if($taskUninstall){$taskUninstall.Dispose()};$taskHive.Dispose();
+      };
+      @{processes=$taskProcesses;registry=@($taskRegistry)} | ConvertTo-Json -Depth 5
+    `;
+    const result=spawnSync('powershell.exe',['-NoProfile','-EncodedCommand',Buffer.from(script,'utf16le').toString('base64')],{encoding:'utf8',windowsHide:true,timeout:15000,maxBuffer:1048576});
+    return result.status===0?result.stdout:JSON.stringify({unavailable:true});
+  }
   const open = async () => {
     active = await startWindowsAcceptanceSession({
       appPath: join(installedDirectory, 'mawjivo.exe'),
@@ -206,6 +225,7 @@ export async function acceptInstalledUpdate({
     await click('تنزيل التحديث');
     await visibleText('تم التحقق من التحديث. يمكنك تثبيته الآن.');
     mark('install-update');
+    await writeFile(join(output,'before-install-diagnostics.json'),installerDiagnostics());
     await click('تثبيت التحديث').catch((error) => {
       if (
         !/disconnected|invalid session|no such window|target window|connection/i.test(error.message)
@@ -265,6 +285,7 @@ export async function acceptInstalledUpdate({
     );
     return proof;
   } catch (error) {
+    await writeFile(join(output,'native-diagnostics.json'),installerDiagnostics()).catch(()=>{});
     await writeFile(
       join(output, 'failure.json'),
       JSON.stringify({ stage, error: error.message }, null, 2) + '\n',
