@@ -1,4 +1,4 @@
-import { readFile, mkdir, mkdtemp, copyFile, stat, realpath, rm } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, mkdtemp, copyFile, stat, realpath, rm } from 'node:fs/promises';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
