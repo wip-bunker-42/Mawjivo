@@ -50,7 +50,7 @@ function candidate(version = '1.0.2') {
 }
 function proof(release) {
   return {
-    version: release.version,
+    packageVersion: release.version,
     sourceCommit: release.sourceCommit,
     packageSha256: release.sha256,
     installedBinarySha256: 'd'.repeat(64),

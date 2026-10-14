@@ -52,7 +52,7 @@ export async function stageRelease(release, store) {
 function acceptanceMatches(release, proof) {
   return (
     proof &&
-    proof.version === release.version &&
+    proof.packageVersion === release.version &&
     proof.sourceCommit === release.sourceCommit &&
     proof.packageSha256 === release.sha256 &&
     /^[a-f0-9]{64}$/.test(proof.installedBinarySha256 ?? '') &&

@@ -12,7 +12,7 @@ export async function hashFile(path) {
   for await (const chunk of createReadStream(path)) digest.update(chunk);
   return digest.digest('hex');
 }
-async function verifySigned(input) {
+export async function verifyDetachedSignature(input) {
   const temporary = await mkdtemp(join(tmpdir(), 'mawjivo-verify-'));
   const publicPath = join(temporary, 'public.key');
   try {
@@ -84,7 +84,7 @@ export async function verifyReleasePackage(directory, options = {}) {
     ),
   );
   const publicKey = config.plugins.updater.pubkey;
-  await (options.verifySigned ?? verifySigned)({
+  await (options.verifySigned ?? verifyDetachedSignature)({
     installerPath,
     signaturePath,
     publicKey,

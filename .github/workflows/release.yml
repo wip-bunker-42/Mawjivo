@@ -85,7 +85,12 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ''
         run: |
           if (!$env:TAURI_SIGNING_PRIVATE_KEY) { throw 'Acceptance signing secret missing.' }
-          $taskAcceptanceConfig = (Resolve-Path -LiteralPath tools/acceptance-tauri.json).Path
+          # Baseline uses the real production namespace on this fresh CI runner,
+          # but its updater trusts only the test channel/key. Never distribute it.
+          $taskAcceptanceConfig = (Resolve-Path -LiteralPath tools/release-acceptance-tauri.json).Path
+          if (Test-Path apps/desktop/src-tauri/target/release/bundle/nsis) {
+            Get-ChildItem -LiteralPath apps/desktop/src-tauri/target/release/bundle/nsis -File | Remove-Item
+          }
           pnpm.cmd --dir apps/desktop exec tauri build --config $taskAcceptanceConfig
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Set-Content .tools/acceptance-notes.txt 'اختبار حفظ المساحات والمسودات أثناء التحديث.' -Encoding utf8NoBOM
@@ -95,14 +100,15 @@ jobs:
         if: inputs.replay_run == ''
         shell: pwsh
         env:
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.MAWJIVO_TEST_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.MAWJIVO_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ''
         run: |
           node scripts/sync-version.mjs 0.1.1
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Get-ChildItem -LiteralPath apps/desktop/src-tauri/target/release/bundle/nsis -File | Remove-Item
-          $taskAcceptanceConfig = (Resolve-Path -LiteralPath tools/acceptance-tauri.json).Path
-          pnpm.cmd --dir apps/desktop exec tauri build --config $taskAcceptanceConfig
+          # Exact production application config and production signature. The
+          # acceptance filename merely avoids reserving an unapproved stable URL.
+          pnpm.cmd --dir apps/desktop exec tauri build
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           cargo build --manifest-path apps/desktop/src-tauri/Cargo.toml --locked --release --features operator-tools --bin verify_update --bin acceptance_data --bin setup
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -110,7 +116,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node scripts/verify-release.mjs .tools/acceptance-base test
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          node scripts/verify-release.mjs .tools/acceptance-next test
+          node scripts/verify-release.mjs .tools/acceptance-next production
           exit $LASTEXITCODE
       - name: Retain successfully built release inputs before runtime acceptance
         if: inputs.replay_run == '' && steps.native-cache.outputs.cache-hit != 'true'
@@ -121,14 +127,29 @@ jobs:
             apps/desktop/src-tauri/target
             .tools/tauri-driver
           key: mawjivo-windows-release-1.99-${{ hashFiles('apps/desktop/src-tauri/Cargo.lock') }}
-      - name: Publish only the verified test-channel installer
+      - name: Sign an isolated test copy of the exact production installer bytes
+        if: inputs.replay_run == ''
+        shell: pwsh
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.MAWJIVO_TEST_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ''
+        run: |
+          $taskNext = Get-Content -LiteralPath .tools/acceptance-next/package-info.json -Raw | ConvertFrom-Json
+          New-Item -ItemType Directory -Force .tools/test-signature | Out-Null
+          $taskCopy = Join-Path (Resolve-Path .tools/test-signature).Path $taskNext.name
+          Copy-Item -LiteralPath ".tools/acceptance-next/$($taskNext.name)" -Destination $taskCopy
+          pnpm.cmd --dir apps/desktop exec tauri signer sign --app-version $taskNext.version $taskCopy
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if ((Get-FileHash -LiteralPath $taskCopy -Algorithm SHA256).Hash.ToLowerInvariant() -ne $taskNext.sha256) { throw 'Supplemental signature installer digest changed.' }
+          "MAWJIVO_TEST_SIGNATURE=$taskCopy.sig" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+      - name: Stage production bytes and activate only the verified test signature
         if: inputs.replay_run == ''
         shell: pwsh
         env:
           MAWJIVO_RELEASE_ACCOUNT_ID: ${{ vars.MAWJIVO_RELEASE_ACCOUNT_ID }}
           MAWJIVO_RELEASE_ACCESS_KEY_ID: ${{ secrets.MAWJIVO_RELEASE_ACCESS_KEY_ID }}
           MAWJIVO_RELEASE_SECRET_KEY: ${{ secrets.MAWJIVO_RELEASE_SECRET_KEY }}
-        run: node scripts/publish-release.mjs .tools/acceptance-next test
+        run: node scripts/publish-acceptance-candidate.mjs .tools/acceptance-next $env:MAWJIVO_TEST_SIGNATURE
       - name: Prepare diagnostic replay of existing signed installers
         if: inputs.replay_run != ''
         shell: pwsh
@@ -206,7 +227,9 @@ jobs:
           MAWJIVO_ACCEPTANCE_DIRECT_DRIVER: ${{ inputs.replay_run != '' }}
           MAWJIVO_ACCEPTANCE_ATTACH_DRIVER: 'true'
         run: |
-          & $env:MAWJIVO_TEST_LAUNCHER --integrity Medium node scripts/accept-installed-update.mjs .tools/acceptance-base .tools/acceptance-next .tools/tauri-driver/bin/tauri-driver.exe .tools/edge-driver/msedgedriver.exe .tools/installed-acceptance
+          $taskFlags = @()
+          if ('${{ inputs.replay_run }}' -eq '') { $taskFlags += '--production-candidate' }
+          & $env:MAWJIVO_TEST_LAUNCHER --integrity Medium node scripts/accept-installed-update.mjs .tools/acceptance-base .tools/acceptance-next .tools/tauri-driver/bin/tauri-driver.exe .tools/edge-driver/msedgedriver.exe .tools/installed-acceptance @taskFlags
           exit $LASTEXITCODE
       - name: Diagnose the previous real WebView startup failure
         if: inputs.diagnostics_only == true && inputs.replay_run != ''
@@ -230,6 +253,7 @@ jobs:
             .tools/installed-acceptance/edge.log
             .tools/installed-acceptance/standalone-startup.json
             .tools/installed-acceptance/managed-app.json
+            .tools/installed-acceptance/session-failure.json
             apps/desktop/src-tauri/target/release/verify_update.exe
             apps/desktop/src-tauri/target/release/acceptance_data.exe
             apps/desktop/src-tauri/target/release/setup.exe
