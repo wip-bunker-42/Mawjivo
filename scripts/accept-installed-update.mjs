@@ -89,6 +89,23 @@ export function makeAcceptanceProof(next, hashes, observations) {
   };
 }
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+export async function acceptanceDistribution(directory, next) {
+  const distribution = JSON.parse(
+    await readFile(join(directory, 'github-distribution.json'), 'utf8'),
+  );
+  assert.ok(
+    [`v${next.version}`, `acceptance-v${next.version}-${next.sourceCommit.slice(0, 8)}`].includes(
+      distribution.tag,
+    ),
+  );
+  const releasePath = `/wip-bunker-42/Mawjivo/releases/download/${distribution.tag}/`;
+  return {
+    manifestUrl: 'https://github.com' + releasePath + 'update-test.json',
+    origin: 'https://github.com',
+    pathname: releasePath + next.name,
+    redirect: 'follow',
+  };
+}
 async function waitFor(operation, timeout = 45000) {
   const deadline = Date.now() + timeout;
   let last;
@@ -214,16 +231,9 @@ export async function acceptInstalledUpdate({
     });
     validateAcceptanceVersions(base, next);
     mark('public-download');
-    const distribution = JSON.parse(
-      await readFile(join(nextPackage, 'github-distribution.json'), 'utf8'),
-    );
-    assert.ok(
-      [`v${next.version}`, `acceptance-v${next.version}-${next.sourceCommit.slice(0, 8)}`].includes(
-        distribution.tag,
-      ),
-    );
-    const releasePath = `/wip-bunker-42/Mawjivo/releases/download/${distribution.tag}/`;
-    const response = await fetch('https://github.com' + releasePath + 'update-test.json', {
+    const distribution = await acceptanceDistribution(nextPackage, next);
+    const response = await fetch(distribution.manifestUrl, {
+      redirect: distribution.redirect,
       signal: AbortSignal.timeout(30000),
     });
     assert.equal(response.status, 200);
@@ -232,9 +242,10 @@ export async function acceptInstalledUpdate({
     assert.equal(manifest.version, next.version);
     assert.equal(manifest.sha256, next.sha256);
     const publicUrl = new URL(manifest.platforms['windows-x86_64'].url);
-    assert.equal(publicUrl.origin, 'https://github.com');
-    assert.equal(publicUrl.pathname, releasePath + next.name);
+    assert.equal(publicUrl.origin, distribution.origin);
+    assert.equal(publicUrl.pathname, distribution.pathname);
     const download = await fetch(publicUrl, {
+      redirect: distribution.redirect,
       signal: AbortSignal.timeout(120000),
     });
     assert.equal(download.status, 200);

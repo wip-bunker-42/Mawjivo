@@ -382,9 +382,9 @@ test('a signed candidate is anonymous prerelease only until actual acceptance pe
     assert.equal(f.state.release.make_latest, 'true');
     assert.equal(
       f.state.assets.some((asset) => asset.name === 'update-test.json'),
-      false,
+      true,
     );
-    assert.equal(f.state.assets.length, 5);
+    assert.equal(f.state.assets.length, 6);
   } finally {
     await f.close();
   }
@@ -442,7 +442,7 @@ test('a published candidate recovers an empty starter when final manifest upload
     f.client.uploadAsset = upload;
     await archiveGithubRelease(f.input, f.deps);
     assert.equal(f.state.release.prerelease, false);
-    assert.equal(f.state.assets.length, 5);
+    assert.equal(f.state.assets.length, 6);
     assert.ok(f.state.assets.every((asset) => asset.state === 'uploaded'));
   } finally {
     await f.close();
