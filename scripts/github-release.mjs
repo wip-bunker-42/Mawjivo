@@ -184,6 +184,18 @@ function assetMatches(actual, expected) {
     actual.id > 0
   );
 }
+function replayManifest(asset) {
+  return (
+    asset.name === 'update-test.json' &&
+    asset.state === 'uploaded' &&
+    Number.isSafeInteger(asset.id) &&
+    asset.id > 0 &&
+    Number.isSafeInteger(asset.size) &&
+    asset.size > 0 &&
+    asset.size <= 32768 &&
+    /^sha256:[a-f0-9]{64}$/.test(asset.digest ?? '')
+  );
+}
 async function requireCurrentVersion(client, version) {
   const latest = await client.latestRelease();
   if (!latest) return;
@@ -319,14 +331,12 @@ export async function archiveGithubRelease(input, overrides = {}) {
     if (!Number.isSafeInteger(archived?.id) || archived.id <= 0)
       throw new Error('GITHUB_RELEASE_API_FAILED');
     const existing = await client.listAssets(archived.id);
-    const stagedCandidate =
-      archived.prerelease &&
-      existing.some((asset) => asset.name === 'update-test.json' && asset.state === 'uploaded');
+    const stagedCandidate = archived.prerelease && existing.some(replayManifest);
     if (
       existing.some(
         (asset) =>
           !assets.some((expected) => expected.name === asset.name) &&
-          !(asset.name === 'update-test.json' && !staging && archived.prerelease),
+          !(!staging && replayManifest(asset)),
       ) ||
       new Set(existing.map((asset) => asset.name)).size !== existing.length
     )
@@ -351,9 +361,11 @@ export async function archiveGithubRelease(input, overrides = {}) {
       if (!assetMatches(actual, asset)) throw new Error('GITHUB_RELEASE_ASSET_CONFLICT');
       assetIds.push(actual.id);
     }
+    // Immutable public test metadata is required by later diagnostic replay.
+    // Production clients select latest.json and trust only the production key.
     if (!staging) {
-      const testManifest = existing.find((asset) => asset.name === 'update-test.json');
-      if (testManifest) await client.deleteAsset(testManifest.id);
+      const testManifest = existing.find(replayManifest);
+      if (testManifest) assetIds.push(testManifest.id);
     }
     if (archived.draft || (!staging && archived.prerelease && mode === 'production')) {
       await requireCurrentVersion(client, release.version);

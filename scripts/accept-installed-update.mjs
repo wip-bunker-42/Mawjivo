@@ -90,9 +90,21 @@ export function makeAcceptanceProof(next, hashes, observations) {
 }
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 export async function acceptanceDistribution(directory, next) {
-  const distribution = JSON.parse(
-    await readFile(join(directory, 'github-distribution.json'), 'utf8'),
-  );
+  let descriptor;
+  try {
+    descriptor = await readFile(join(directory, 'github-distribution.json'), 'utf8');
+  } catch (error) {
+    // Read-only replay compatibility for already signed pre-GitHub artifacts.
+    // Newly built versions must carry their explicit source-bound GitHub tag.
+    if (error.code !== 'ENOENT' || compareVersions(next.version, '0.1.2') >= 0) throw error;
+    return {
+      manifestUrl: 'https://downloads.aimansour.com/updates/windows-x86_64-test.json',
+      origin: 'https://downloads.aimansour.com',
+      pathname: `/releases/${next.version}/${next.name}`,
+      redirect: 'error',
+    };
+  }
+  const distribution = JSON.parse(descriptor);
   assert.ok(
     [`v${next.version}`, `acceptance-v${next.version}-${next.sourceCommit.slice(0, 8)}`].includes(
       distribution.tag,
