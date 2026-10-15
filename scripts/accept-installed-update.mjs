@@ -214,20 +214,27 @@ export async function acceptInstalledUpdate({
     });
     validateAcceptanceVersions(base, next);
     mark('public-download');
-    const response = await fetch(
-      'https://downloads.aimansour.com/updates/windows-x86_64-test.json',
-      { redirect: 'error', signal: AbortSignal.timeout(15000) },
+    const distribution = JSON.parse(
+      await readFile(join(nextPackage, 'github-distribution.json'), 'utf8'),
     );
+    assert.ok(
+      [`v${next.version}`, `acceptance-v${next.version}-${next.sourceCommit.slice(0, 8)}`].includes(
+        distribution.tag,
+      ),
+    );
+    const releasePath = `/wip-bunker-42/Mawjivo/releases/download/${distribution.tag}/`;
+    const response = await fetch('https://github.com' + releasePath + 'update-test.json', {
+      signal: AbortSignal.timeout(30000),
+    });
     assert.equal(response.status, 200);
     const manifest = await response.json();
     assert.equal(manifest.sourceCommit, next.sourceCommit);
     assert.equal(manifest.version, next.version);
     assert.equal(manifest.sha256, next.sha256);
     const publicUrl = new URL(manifest.platforms['windows-x86_64'].url);
-    assert.equal(publicUrl.origin, 'https://downloads.aimansour.com');
-    assert.equal(publicUrl.pathname, `/releases/${next.version}/${next.name}`);
+    assert.equal(publicUrl.origin, 'https://github.com');
+    assert.equal(publicUrl.pathname, releasePath + next.name);
     const download = await fetch(publicUrl, {
-      redirect: 'error',
       signal: AbortSignal.timeout(120000),
     });
     assert.equal(download.status, 200);

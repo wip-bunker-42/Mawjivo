@@ -38,7 +38,15 @@ async function fixture() {
     productionCandidate: true,
     verifiedAt: '2026-10-14T00:00:00.000Z',
   };
-  const state = { release: null, assets: [], contents: new Map(), creates: 0, uploads: [], published: 0, failAt: null };
+  const state = {
+    release: null,
+    assets: [],
+    contents: new Map(),
+    creates: 0,
+    uploads: [],
+    published: 0,
+    failAt: null,
+  };
   const client = {
     repository: async () => ({ private: true }),
     resolveTag: async () => (state.release ? sourceCommit : null),
@@ -68,7 +76,9 @@ async function fixture() {
       Object.assign(state.release, body);
       return state.release;
     },
-    deleteAsset: async (id) => { state.assets = state.assets.filter((asset) => asset.id !== id); },
+    deleteAsset: async (id) => {
+      state.assets = state.assets.filter((asset) => asset.id !== id);
+    },
   };
   return {
     packageDirectory,
@@ -150,12 +160,17 @@ test('a partial draft resumes matching assets and publishes its signed GitHub up
     assert.ok(!f.state.uploads.some((n) => n.endsWith('.secrets.env')));
     const manifest = JSON.parse(f.state.contents.get('latest.json'));
     assert.deepEqual(manifest, {
-      version: '0.1.1', notes: 'نقل الإعدادات والتحديث.', bytes: 16,
-      sha256: sha(Buffer.from('signed installer')), sourceCommit,
-      platforms: { 'windows-x86_64': {
-        url: 'https://github.com/wip-bunker-42/Mawjivo/releases/download/v0.1.1/Mawjivo_0.1.1_x64-setup.exe',
-        signature: 'production signature',
-      } },
+      version: '0.1.1',
+      notes: 'نقل الإعدادات والتحديث.',
+      bytes: 16,
+      sha256: sha(Buffer.from('signed installer')),
+      sourceCommit,
+      platforms: {
+        'windows-x86_64': {
+          url: 'https://github.com/wip-bunker-42/Mawjivo/releases/download/v0.1.1/Mawjivo_0.1.1_x64-setup.exe',
+          signature: 'production signature',
+        },
+      },
     });
   } finally {
     await f.close();
@@ -332,8 +347,16 @@ test('a signed candidate is anonymous prerelease only until actual acceptance pe
     const testSignaturePath = join(f.packageDirectory, 'supplemental.sig');
     await writeFile(testSignaturePath, 'test signature');
     let verifiedTest = false;
-    const deps = { ...f.deps, verifyTestSignature: async () => { verifiedTest = true; } };
-    await archiveGithubRelease({ ...f.input, stageOnly: true, acceptanceProof: null, testSignaturePath }, deps);
+    const deps = {
+      ...f.deps,
+      verifyTestSignature: async () => {
+        verifiedTest = true;
+      },
+    };
+    await archiveGithubRelease(
+      { ...f.input, stageOnly: true, acceptanceProof: null, testSignaturePath },
+      deps,
+    );
     assert.equal(verifiedTest, true);
     assert.equal(f.state.release.draft, false);
     assert.equal(f.state.release.prerelease, true);
@@ -341,16 +364,29 @@ test('a signed candidate is anonymous prerelease only until actual acceptance pe
     assert.equal(f.state.contents.has('latest.json'), false);
     const candidate = JSON.parse(f.state.contents.get('update-test.json'));
     assert.equal(candidate.platforms['windows-x86_64'].signature, 'test signature');
-    assert.equal(candidate.platforms['windows-x86_64'].url, 'https://github.com/wip-bunker-42/Mawjivo/releases/download/v0.1.1/Mawjivo_0.1.1_x64-setup.exe');
+    assert.equal(
+      candidate.platforms['windows-x86_64'].url,
+      'https://github.com/wip-bunker-42/Mawjivo/releases/download/v0.1.1/Mawjivo_0.1.1_x64-setup.exe',
+    );
     assert.equal(f.state.contents.get(f.release.name + '.sig'), 'production signature');
-    await assert.rejects(archiveGithubRelease({ ...f.input, acceptanceProof: { ...f.acceptanceProof, vaultPreserved: false } }, f.deps));
+    await assert.rejects(
+      archiveGithubRelease(
+        { ...f.input, acceptanceProof: { ...f.acceptanceProof, vaultPreserved: false } },
+        f.deps,
+      ),
+    );
     assert.equal(f.state.release.prerelease, true);
     await archiveGithubRelease(f.input, f.deps);
     assert.equal(f.state.release.prerelease, false);
     assert.equal(f.state.release.make_latest, 'true');
-    assert.equal(f.state.assets.some((asset) => asset.name === 'update-test.json'), false);
+    assert.equal(
+      f.state.assets.some((asset) => asset.name === 'update-test.json'),
+      false,
+    );
     assert.equal(f.state.assets.length, 5);
-  } finally { await f.close(); }
+  } finally {
+    await f.close();
+  }
 });
 
 test('an invalid supplemental signature prevents any candidate publication', async () => {
@@ -358,9 +394,67 @@ test('an invalid supplemental signature prevents any candidate publication', asy
   try {
     const testSignaturePath = join(f.packageDirectory, 'supplemental.sig');
     await writeFile(testSignaturePath, 'test signature');
-    await assert.rejects(archiveGithubRelease({ ...f.input, stageOnly: true, acceptanceProof: null, testSignaturePath }, {
-      ...f.deps, verifyTestSignature: async () => { throw new Error('RELEASE_SIGNATURE_INVALID'); },
-    }), /RELEASE_SIGNATURE_INVALID/);
+    await assert.rejects(
+      archiveGithubRelease(
+        { ...f.input, stageOnly: true, acceptanceProof: null, testSignaturePath },
+        {
+          ...f.deps,
+          verifyTestSignature: async () => {
+            throw new Error('RELEASE_SIGNATURE_INVALID');
+          },
+        },
+      ),
+      /RELEASE_SIGNATURE_INVALID/,
+    );
     assert.equal(f.state.creates, 0);
-  } finally { await f.close(); }
+  } finally {
+    await f.close();
+  }
+});
+
+test('a published candidate recovers an empty starter when final manifest upload was interrupted', async () => {
+  const f = await fixture();
+  try {
+    const testSignaturePath = join(f.packageDirectory, 'supplemental.sig');
+    await writeFile(testSignaturePath, 'test signature');
+    await archiveGithubRelease(
+      { ...f.input, stageOnly: true, acceptanceProof: null, testSignaturePath },
+      { ...f.deps, verifyTestSignature: async () => {} },
+    );
+    const upload = f.client.uploadAsset;
+    f.client.uploadAsset = async (id, asset) => {
+      if (asset.name === 'latest.json') {
+        f.state.assets.push({
+          id: 999,
+          name: 'latest.json',
+          size: 0,
+          state: 'starter',
+          digest: null,
+        });
+        throw new Error('NETWORK_INTERRUPTED');
+      }
+      return upload(id, asset);
+    };
+    await assert.rejects(archiveGithubRelease(f.input, f.deps), /NETWORK_INTERRUPTED/);
+    assert.equal(f.state.release.prerelease, true);
+    assert.equal(f.state.release.make_latest, 'false');
+    f.client.uploadAsset = upload;
+    await archiveGithubRelease(f.input, f.deps);
+    assert.equal(f.state.release.prerelease, false);
+    assert.equal(f.state.assets.length, 5);
+    assert.ok(f.state.assets.every((asset) => asset.state === 'uploaded'));
+  } finally {
+    await f.close();
+  }
+});
+
+test('a newer stable GitHub release prevents publishing an older package as latest', async () => {
+  const f = await fixture();
+  try {
+    f.client.latestRelease = async () => ({ tag_name: 'v0.1.2' });
+    await assert.rejects(archiveGithubRelease(f.input, f.deps), /GITHUB_RELEASE_OLDER/);
+    assert.equal(f.state.creates, 0);
+  } finally {
+    await f.close();
+  }
 });

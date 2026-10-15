@@ -3,23 +3,35 @@ import { readFile, writeFile, mkdtemp, realpath, stat, unlink, rmdir } from 'nod
 import { join, resolve, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { pathToFileURL, fileURLToPath } from 'node:url';
-import { verifyReleasePackage, hashFile } from './verify-release.mjs';
+import { verifyReleasePackage, verifyDetachedSignature, hashFile } from './verify-release.mjs';
 import { stableVersion } from './release-records.mjs';
 const root = fileURLToPath(new URL('..', import.meta.url));
 export function githubUpdateManifest(release, tag, signature) {
   stableVersion(release.version);
-  if (!/^[a-f0-9]{40}$/.test(release.sourceCommit) ||
-      ![ `v${release.version}`, `acceptance-v${release.version}-${release.sourceCommit.slice(0, 8)}` ].includes(tag) ||
-      !/^Mawjivo[A-Za-z0-9_.-]{1,160}\.exe$/.test(release.name) ||
-      typeof signature !== 'string' || !signature.trim() || signature.length > 4096)
+  if (
+    !/^[a-f0-9]{40}$/.test(release.sourceCommit) ||
+    ![
+      `v${release.version}`,
+      `acceptance-v${release.version}-${release.sourceCommit.slice(0, 8)}`,
+    ].includes(tag) ||
+    !/^Mawjivo[A-Za-z0-9_.-]{1,160}\.exe$/.test(release.name) ||
+    typeof signature !== 'string' ||
+    !signature.trim() ||
+    signature.length > 4096
+  )
     throw new Error('GITHUB_RELEASE_INPUT');
   return {
-    version: release.version, notes: release.notesAr, bytes: release.bytes,
-    sha256: release.sha256, sourceCommit: release.sourceCommit,
-    platforms: { 'windows-x86_64': {
-      url: `https://github.com/wip-bunker-42/Mawjivo/releases/download/${tag}/${release.name}`,
-      signature: signature.trim(),
-    } },
+    version: release.version,
+    notes: release.notesAr,
+    bytes: release.bytes,
+    sha256: release.sha256,
+    sourceCommit: release.sourceCommit,
+    platforms: {
+      'windows-x86_64': {
+        url: `https://github.com/wip-bunker-42/Mawjivo/releases/download/${tag}/${release.name}`,
+        signature: signature.trim(),
+      },
+    },
   };
 }
 function gh(args, run = spawnSync) {
@@ -189,9 +201,14 @@ export async function archiveGithubRelease(input, overrides = {}) {
     isActions: process.env.GITHUB_ACTIONS === 'true',
     verifyPackage: verifyReleasePackage,
     validateProject: projectVersion,
+    verifyTestSignature: async (input) => {
+      const config = JSON.parse(await readFile(join(root, 'tools/acceptance-tauri.json'), 'utf8'));
+      await verifyDetachedSignature({ ...input, publicKey: config.plugins.updater.pubkey });
+    },
     ...overrides,
   };
   const { tag, packageDirectory, acceptanceProof, sourceCommit, mode } = input;
+  const staging = input.stageOnly === true;
   if (!['production', 'acceptance'].includes(mode) || !/^[a-f0-9]{40}$/.test(sourceCommit ?? ''))
     throw new Error('GITHUB_RELEASE_INPUT');
   const release = await dependencies.verifyPackage(packageDirectory, { channel: 'production' });
@@ -204,7 +221,7 @@ export async function archiveGithubRelease(input, overrides = {}) {
     tag !== expectedTag ||
     sourceCommit !== release.sourceCommit ||
     (await dependencies.validateProject(sourceCommit)) !== release.version ||
-    !proofMatches(release, acceptanceProof)
+    (!staging && !proofMatches(release, acceptanceProof))
   )
     throw new Error('GITHUB_RELEASE_INPUT');
   const client = dependencies.client;
@@ -219,7 +236,8 @@ export async function archiveGithubRelease(input, overrides = {}) {
     archived &&
     (archived.tag_name !== tag ||
       (!tagCommit && archived.target_commitish !== sourceCommit) ||
-      archived.prerelease !== (mode === 'acceptance') ||
+      (mode === 'acceptance' && !archived.prerelease) ||
+      (staging && !archived.draft && !archived.prerelease) ||
       archived.body !== body)
   )
     throw new Error('GITHUB_RELEASE_SOURCE_CONFLICT');
@@ -227,10 +245,25 @@ export async function archiveGithubRelease(input, overrides = {}) {
   const temporary = await mkdtemp(join(tmpdir(), 'mawjivo-gh-proof-')),
     proofPath = join(temporary, 'acceptance-proof.json');
   try {
-    await writeFile(proofPath, JSON.stringify(safeProof(acceptanceProof), null, 2) + '\n');
-    const manifestPath = join(temporary, 'latest.json');
-    await writeFile(manifestPath, JSON.stringify(githubUpdateManifest(release, tag,
-      await readFile(join(packageRoot, release.name + '.sig'), 'utf8')), null, 2) + '\n');
+    let signature = await readFile(join(packageRoot, release.name + '.sig'), 'utf8');
+    if (staging) {
+      if (!input.testSignaturePath || (await stat(input.testSignaturePath)).size > 4096)
+        throw new Error('RELEASE_SIGNATURE_INVALID');
+      signature = await readFile(input.testSignaturePath, 'utf8');
+      await dependencies.verifyTestSignature({
+        installerPath: join(packageRoot, release.name),
+        signaturePath: input.testSignaturePath,
+        version: release.version,
+      });
+    } else {
+      await writeFile(proofPath, JSON.stringify(safeProof(acceptanceProof), null, 2) + '\n');
+    }
+    const manifestName = staging ? 'update-test.json' : 'latest.json';
+    const manifestPath = join(temporary, manifestName);
+    await writeFile(
+      manifestPath,
+      JSON.stringify(githubUpdateManifest(release, tag, signature), null, 2) + '\n',
+    );
     const assets = [];
     for (const name of [release.name, release.name + '.sig', 'package-info.json']) {
       const path = join(packageRoot, name);
@@ -248,15 +281,21 @@ export async function archiveGithubRelease(input, overrides = {}) {
             : 'application/json',
       });
     }
+    if (!staging)
+      assets.push({
+        name: 'acceptance-proof.json',
+        path: proofPath,
+        bytes: (await stat(proofPath)).size,
+        sha256: await hashFile(proofPath),
+        contentType: 'application/json',
+      });
     assets.push({
-      name: 'acceptance-proof.json',
-      path: proofPath,
-      bytes: (await stat(proofPath)).size,
-      sha256: await hashFile(proofPath),
+      name: manifestName,
+      path: manifestPath,
+      bytes: (await stat(manifestPath)).size,
+      sha256: await hashFile(manifestPath),
       contentType: 'application/json',
     });
-    assets.push({ name: 'latest.json', path: manifestPath, bytes: (await stat(manifestPath)).size,
-      sha256: await hashFile(manifestPath), contentType: 'application/json' });
     if (!archived)
       archived = await client.createDraft({
         tag_name: tag,
@@ -264,14 +303,18 @@ export async function archiveGithubRelease(input, overrides = {}) {
         name: `Mawjivo ${release.version}${mode === 'acceptance' ? ' — اختبار القبول' : ''}`,
         body,
         draft: true,
-        prerelease: mode === 'acceptance',
+        prerelease: staging || mode === 'acceptance',
         make_latest: 'false',
       });
     if (!Number.isSafeInteger(archived?.id) || archived.id <= 0)
       throw new Error('GITHUB_RELEASE_API_FAILED');
     const existing = await client.listAssets(archived.id);
     if (
-      existing.some((asset) => !assets.some((expected) => expected.name === asset.name)) ||
+      existing.some(
+        (asset) =>
+          !assets.some((expected) => expected.name === asset.name) &&
+          !(asset.name === 'update-test.json' && !staging && archived.prerelease),
+      ) ||
       new Set(existing.map((asset) => asset.name)).size !== existing.length
     )
       throw new Error('GITHUB_RELEASE_ASSET_CONFLICT');
@@ -295,27 +338,37 @@ export async function archiveGithubRelease(input, overrides = {}) {
       if (!assetMatches(actual, asset)) throw new Error('GITHUB_RELEASE_ASSET_CONFLICT');
       assetIds.push(actual.id);
     }
-    if (archived.draft)
+    if (!staging) {
+      const testManifest = existing.find((asset) => asset.name === 'update-test.json');
+      if (testManifest) await client.deleteAsset(testManifest.id);
+    }
+    if (archived.draft || (!staging && archived.prerelease && mode === 'production'))
       await client.publishRelease(archived.id, {
         draft: false,
-        prerelease: mode === 'acceptance',
-        make_latest: mode === 'acceptance' ? 'false' : 'true',
+        prerelease: staging || mode === 'acceptance',
+        make_latest: staging || mode === 'acceptance' ? 'false' : 'true',
       });
     return { releaseId: archived.id, assetIds };
   } finally {
     await unlink(proofPath).catch(() => {});
     await unlink(join(temporary, 'latest.json')).catch(() => {});
+    await unlink(join(temporary, 'update-test.json')).catch(() => {});
     await rmdir(temporary).catch(() => {});
   }
 }
 if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {
-  const [tag, packageDirectory, proofPath, sourceCommit, mode] = process.argv.slice(2);
+  const staging = process.argv[2] === '--stage';
+  const [tag, packageDirectory, proofPath, sourceCommit, mode] = process.argv.slice(
+    staging ? 3 : 2,
+  );
   console.log(
     JSON.stringify(
       await archiveGithubRelease({
         tag,
         packageDirectory,
-        acceptanceProof: JSON.parse(await readFile(proofPath, 'utf8')),
+        acceptanceProof: staging ? null : JSON.parse(await readFile(proofPath, 'utf8')),
+        stageOnly: staging,
+        testSignaturePath: staging ? proofPath : undefined,
         sourceCommit,
         mode,
       }),

@@ -7,7 +7,7 @@ on:
         required: false
         default: acceptance
         type: choice
-        options: [acceptance, production, cleanup, replay]
+        options: [acceptance, production, replay]
       production_candidate_replay:
         description: 'Replay the real production-signed candidate with CI-only empty production data'
         required: false
@@ -25,8 +25,6 @@ on:
         type: string
   push:
     tags: ['v*']
-  schedule:
-    - cron: '17 4 * * 0'
 permissions:
   contents: read
   actions: read
@@ -60,6 +58,12 @@ jobs:
     env:
       MAWJIVO_RELEASE_VERSION: ${{ needs.resolve.outputs.version }}
       MAWJIVO_BASELINE_VERSION: ${{ needs.resolve.outputs.baselineVersion }}
+      MAWJIVO_RELEASE_TAG: ${{ needs.resolve.outputs.tag }}
+      MAWJIVO_RELEASE_MODE: ${{ needs.resolve.outputs.mode }}
+    # This job publishes only the signed prerelease needed for real acceptance.
+    permissions:
+      contents: write
+      actions: read
     runs-on: windows-2025
     timeout-minutes: 75
     steps:
@@ -114,6 +118,13 @@ jobs:
             cargo install tauri-driver --version 2.1.0 --locked --root .tools/tauri-driver
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
+      - name: Configure isolated GitHub acceptance endpoint
+        if: inputs.replay_run == ''
+        shell: pwsh
+        run: |
+          $taskConfig = Get-Content -LiteralPath tools/release-acceptance-tauri.json -Raw | ConvertFrom-Json
+          $taskConfig.plugins.updater.endpoints = @("https://github.com/wip-bunker-42/Mawjivo/releases/download/$env:MAWJIVO_RELEASE_TAG/update-test.json")
+          $taskConfig | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath .tools/release-acceptance-tauri.json -Encoding utf8NoBOM
       - name: Build signed clean-install candidate
         if: inputs.replay_run == ''
         shell: pwsh
@@ -126,13 +137,13 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           # Baseline uses the real production namespace on this fresh CI runner,
           # but its updater trusts only the test channel/key. Never distribute it.
-          $taskAcceptanceConfig = (Resolve-Path -LiteralPath tools/release-acceptance-tauri.json).Path
+          $taskAcceptanceConfig = (Resolve-Path -LiteralPath .tools/release-acceptance-tauri.json).Path
           if (Test-Path apps/desktop/src-tauri/target/release/bundle/nsis) {
             Get-ChildItem -LiteralPath apps/desktop/src-tauri/target/release/bundle/nsis -File | Remove-Item
           }
           pnpm.cmd --dir apps/desktop exec tauri build --config $taskAcceptanceConfig
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          Set-Content .tools/acceptance-notes.txt 'اختبار حفظ المساحات والمسودات أثناء التحديث.' -Encoding utf8NoBOM
+          Set-Content .tools/acceptance-notes.txt 'التنزيل والتحديث من GitHub مباشرة، مع حفظ الحسابات والمسودات.' -Encoding utf8NoBOM
           node scripts/package-windows-release.mjs apps/desktop/src-tauri/target/release/bundle/nsis .tools/acceptance-base $env:MAWJIVO_BASELINE_VERSION $env:GITHUB_SHA test .tools/acceptance-notes.txt
           exit $LASTEXITCODE
       - name: Build signed next-version candidate and independent verifier
@@ -151,7 +162,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           cargo build --manifest-path apps/desktop/src-tauri/Cargo.toml --locked --release --features operator-tools --bin verify_update --bin acceptance_data --bin setup
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          node scripts/package-windows-release.mjs apps/desktop/src-tauri/target/release/bundle/nsis .tools/acceptance-next $env:MAWJIVO_RELEASE_VERSION $env:GITHUB_SHA test .tools/acceptance-notes.txt
+          node scripts/package-windows-release.mjs apps/desktop/src-tauri/target/release/bundle/nsis .tools/acceptance-next $env:MAWJIVO_RELEASE_VERSION $env:GITHUB_SHA production .tools/acceptance-notes.txt
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node scripts/verify-release.mjs .tools/acceptance-base test
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -181,14 +192,15 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           if ((Get-FileHash -LiteralPath $taskCopy -Algorithm SHA256).Hash.ToLowerInvariant() -ne $taskNext.sha256) { throw 'Supplemental signature installer digest changed.' }
           "MAWJIVO_TEST_SIGNATURE=$taskCopy.sig" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-      - name: Stage production bytes and activate only the verified test signature
+      - name: Publish signed GitHub prerelease with isolated test manifest
         if: inputs.replay_run == ''
         shell: pwsh
         env:
-          MAWJIVO_RELEASE_ACCOUNT_ID: ${{ vars.MAWJIVO_RELEASE_ACCOUNT_ID }}
-          MAWJIVO_RELEASE_ACCESS_KEY_ID: ${{ secrets.MAWJIVO_RELEASE_ACCESS_KEY_ID }}
-          MAWJIVO_RELEASE_SECRET_KEY: ${{ secrets.MAWJIVO_RELEASE_SECRET_KEY }}
-        run: node scripts/publish-acceptance-candidate.mjs .tools/acceptance-next $env:MAWJIVO_TEST_SIGNATURE
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          node scripts/github-release.mjs --stage $env:MAWJIVO_RELEASE_TAG .tools/acceptance-next $env:MAWJIVO_TEST_SIGNATURE $env:GITHUB_SHA $env:MAWJIVO_RELEASE_MODE
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          @{ tag = $env:MAWJIVO_RELEASE_TAG } | ConvertTo-Json | Set-Content -LiteralPath .tools/acceptance-next/github-distribution.json -Encoding utf8NoBOM
       - name: Prepare diagnostic replay of existing signed installers
         if: inputs.replay_run != ''
         shell: pwsh
@@ -345,41 +357,11 @@ jobs:
           $taskInfo = Get-Content -LiteralPath .tools/acceptance-next/package-info.json -Raw | ConvertFrom-Json
           if ($taskInfo.sourceCommit -ne $env:GITHUB_SHA -or $taskInfo.version -ne $env:MAWJIVO_RELEASE_VERSION) { throw 'Accepted package source/version mismatch.' }
           Set-Content -LiteralPath .tools/release-notes.txt -Value $taskInfo.notesAr -Encoding utf8NoBOM
-          node scripts/package-windows-release.mjs .tools/acceptance-next .tools/production-package $env:MAWJIVO_RELEASE_VERSION $env:GITHUB_SHA production .tools/release-notes.txt
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          # Preserve the exact candidate filename: its accepted public URL and
+          # signature are immutable, so promotion adds proof without repackaging.
+          Copy-Item -LiteralPath .tools/acceptance-next -Destination .tools/production-package -Recurse
           node scripts/verify-release.mjs .tools/production-package production
           exit $LASTEXITCODE
       - name: Archive the proven signed package
         shell: pwsh
         run: node scripts/github-release.mjs $env:MAWJIVO_RELEASE_TAG .tools/production-package .tools/accepted-run/.tools/installed-acceptance/acceptance-proof.json $env:GITHUB_SHA $env:MAWJIVO_RELEASE_MODE
-      - name: Activate the proven production update, verify the public manifest, then clean older app packages
-        if: needs.resolve.outputs.mode == 'production'
-        shell: pwsh
-        env:
-          MAWJIVO_RELEASE_ACCOUNT_ID: ${{ vars.MAWJIVO_RELEASE_ACCOUNT_ID }}
-          MAWJIVO_RELEASE_ACCESS_KEY_ID: ${{ secrets.MAWJIVO_RELEASE_ACCESS_KEY_ID }}
-          MAWJIVO_RELEASE_SECRET_KEY: ${{ secrets.MAWJIVO_RELEASE_SECRET_KEY }}
-        run: node scripts/publish-release.mjs .tools/production-package production .tools/accepted-run/.tools/installed-acceptance/acceptance-proof.json
-  cleanup:
-    needs: resolve
-    if: needs.resolve.outputs.mode == 'cleanup'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version-file: .node-version
-      - name: Install locked cleanup dependencies
-        run: |
-          task_pnpm=$(node -p 'require("./package.json").packageManager')
-          npm install --global "$task_pnpm"
-          pnpm install --frozen-lockfile
-      - name: Remove only proven expired app packages
-        env:
-          MAWJIVO_RELEASE_ACCOUNT_ID: ${{ vars.MAWJIVO_RELEASE_ACCOUNT_ID }}
-          MAWJIVO_RELEASE_ACCESS_KEY_ID: ${{ secrets.MAWJIVO_RELEASE_ACCESS_KEY_ID }}
-          MAWJIVO_RELEASE_SECRET_KEY: ${{ secrets.MAWJIVO_RELEASE_SECRET_KEY }}
-        run: node scripts/publish-release.mjs --cleanup

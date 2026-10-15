@@ -139,23 +139,23 @@ test('diagnostic options without a completed run id are refused before any build
     );
   }
 });
-test('release workflow limits write permissions to archive publishing and keeps one uncancelled publisher', async () => {
+test('GitHub-only release workflow scopes publication permissions and keeps one uncancelled publisher', async () => {
   const file = await readFile(
     new URL('../../.github/workflows/release.yml', import.meta.url),
     'utf8',
   );
-  assert.match(file, /schedule:/);
+  assert.doesNotMatch(file, /schedule:/);
   assert.match(file, /tags:\s*\[\s*['"]v\*['"]\s*\]/);
   assert.match(file, /cancel-in-progress: false/);
   assert.match(file, /archive:[\s\S]*?permissions:\s*\n\s+contents: write/);
   assert.match(file, /needs:\s*\[resolve, acceptance\]/);
   assert.match(file, /github-release\.mjs/);
-  assert.match(file, /publish-release\.mjs/);
-  assert.match(file, /needs\.resolve\.outputs\.mode == 'production'/);
-  assert.ok(
-    file.indexOf('Archive the proven signed package') <
-      file.indexOf('Activate the proven production update'),
+  assert.doesNotMatch(
+    file,
+    /publish-release\.mjs|publish-acceptance-candidate\.mjs|MAWJIVO_RELEASE_SECRET_KEY|MAWJIVO_RELEASE_ACCESS_KEY_ID/,
   );
+  assert.match(file, /needs\.resolve\.outputs\.mode == 'production'/);
+  assert.match(file, /github-release\.mjs --stage/);
   assert.doesNotMatch(file, /path:[\s\S]*?\*\.secrets\.env/);
   assert.doesNotMatch(file, /\.tools\/test-signature\/\s*\n/);
 });
