@@ -18,17 +18,47 @@ pub struct UpdateProgress {
     pub phase: String,
 }
 pub struct TauriUpdater(pub AppHandle);
+fn github_release_path(path: &str) -> bool {
+    let Some((tag, file)) = path
+        .strip_prefix("/wip-bunker-42/Mawjivo/releases/download/")
+        .and_then(|path| path.split_once('/'))
+    else {
+        return false;
+    };
+    let version = if let Some(candidate) = tag.strip_prefix("acceptance-v") {
+        let Some((version, commit)) = candidate.rsplit_once('-') else {
+            return false;
+        };
+        if commit.len() != 8 || !commit.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+            return false;
+        }
+        version
+    } else if let Some(version) = tag.strip_prefix('v') {
+        version
+    } else {
+        return false;
+    };
+    let parts: Vec<_> = version.split('.').collect();
+    parts.len() == 3
+        && parts
+            .iter()
+            .all(|part| !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_digit()))
+        && file.starts_with("Mawjivo")
+        && file.ends_with(".exe")
+        && file.len() <= 171
+        && file
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || b"_.-".contains(&byte))
+}
 pub fn validate_download_url(url: &reqwest::Url, bytes: u64) -> Result<(), AppError> {
     if url.scheme() != "https"
-        || url.host_str() != Some("downloads.aimansour.com")
+        || url.host_str() != Some("github.com")
         || url.port().is_some()
         || !url.username().is_empty()
         || url.password().is_some()
         || url.query().is_some()
         || url.fragment().is_some()
-        || !url.path().starts_with("/releases/")
-        || !url.path().ends_with(".exe")
-        || url.path().contains('%')
+        || !github_release_path(url.path())
         || bytes == 0
         || bytes > MAX_UPDATE_BYTES
     {

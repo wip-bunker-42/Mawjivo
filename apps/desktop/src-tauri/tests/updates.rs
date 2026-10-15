@@ -11,6 +11,7 @@ fn updater_accepts_our_public_github_installer_and_refuses_other_sources() {
     use mawjivo_lib::updates::tauri_backend::validate_download_url;
     let valid = "https://github.com/wip-bunker-42/Mawjivo/releases/download/v0.1.2/Mawjivo_0.1.2_x64-setup.exe";
     validate_download_url(&valid.parse().unwrap(), 20_000_000).unwrap();
+    validate_download_url(&"https://github.com/wip-bunker-42/Mawjivo/releases/download/acceptance-v0.1.2-aaaaaaaa/Mawjivo_0.1.2_x64-setup.exe".parse().unwrap(), 20_000_000).unwrap();
     for invalid in [
         "https://downloads.aimansour.com/releases/0.1.2/Mawjivo_0.1.2_x64-setup.exe",
         "https://github.com/other/Mawjivo/releases/download/v0.1.2/Mawjivo_0.1.2_x64-setup.exe",
@@ -19,6 +20,10 @@ fn updater_accepts_our_public_github_installer_and_refuses_other_sources() {
         "http://github.com/wip-bunker-42/Mawjivo/releases/download/v0.1.2/Mawjivo_0.1.2_x64-setup.exe",
         "https://user@github.com/wip-bunker-42/Mawjivo/releases/download/v0.1.2/Mawjivo_0.1.2_x64-setup.exe",
         "https://github.com/wip-bunker-42/Mawjivo/releases/download/v0.1.2/Mawjivo_0.1.2_x64-setup.exe?token=unsafe",
+        "https://github.com/wip-bunker-42/Mawjivo/releases/download/v0.1.2/Mawjivo_0.1.2_x64-setup.exe#unsafe",
+        "https://github.com/wip-bunker-42/Mawjivo/releases/download/main/Mawjivo_0.1.2_x64-setup.exe",
+        "https://github.com/wip-bunker-42/Mawjivo/releases/download/v0.1.2/folder/Mawjivo_0.1.2_x64-setup.exe",
+        "https://github.com/wip-bunker-42/Mawjivo/releases/download/v0.1.2/Mawjivo_%2Funsafe.exe",
     ] {
         assert_eq!(
             validate_download_url(&invalid.parse().unwrap(), 20_000_000)

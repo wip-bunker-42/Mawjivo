@@ -2,7 +2,9 @@
   "plugins": {
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEFDQzJEOUNEMTEyQUFGM0MKUldROHJ5b1J6ZG5DckJYb05vUy9jNG5PRXFVclYrTy9QQUdqSzczZ3JYNVk0L1VDa1k3VEJWZDcK",
-      "endpoints": ["https://downloads.aimansour.com/updates/windows-x86_64-test.json"],
+      "endpoints": [
+        "https://github.com/wip-bunker-42/Mawjivo/releases/latest/download/latest.json"
+      ],
       "windows": {
         "installMode": "passive"
       },

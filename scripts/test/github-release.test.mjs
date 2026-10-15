@@ -49,6 +49,7 @@ async function fixture() {
   };
   const client = {
     repository: async () => ({ private: true }),
+    latestRelease: async () => null,
     resolveTag: async () => (state.release ? sourceCommit : null),
     getRelease: async () => state.release,
     createDraft: async (body) => {

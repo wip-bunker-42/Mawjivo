@@ -4,7 +4,7 @@ import { join, resolve, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import { verifyReleasePackage, verifyDetachedSignature, hashFile } from './verify-release.mjs';
-import { stableVersion } from './release-records.mjs';
+import { stableVersion, compareVersions } from './release-records.mjs';
 const root = fileURLToPath(new URL('..', import.meta.url));
 export function githubUpdateManifest(release, tag, signature) {
   stableVersion(release.version);
@@ -76,6 +76,7 @@ export function createGithubReleaseClient(options = {}) {
   const base = `repos/${repository}`;
   return {
     repository: async () => execute(['api', base]),
+    latestRelease: async () => execute(['api', `${base}/releases/latest`]),
     getRelease: async (tag) => {
       for (let page = 1; page <= 5; page++) {
         const releases = await execute(['api', `${base}/releases?per_page=100&page=${page}`]);
@@ -183,6 +184,14 @@ function assetMatches(actual, expected) {
     actual.id > 0
   );
 }
+async function requireCurrentVersion(client, version) {
+  const latest = await client.latestRelease();
+  if (!latest) return;
+  if (typeof latest.tag_name !== 'string' || !latest.tag_name.startsWith('v'))
+    throw new Error('GITHUB_RELEASE_API_FAILED');
+  if (compareVersions(version, latest.tag_name.slice(1)) < 0)
+    throw new Error('GITHUB_RELEASE_OLDER');
+}
 async function projectVersion(sourceCommit) {
   const head = spawnSync('git', ['rev-parse', 'HEAD'], {
     cwd: root,
@@ -230,6 +239,7 @@ export async function archiveGithubRelease(input, overrides = {}) {
   const tagCommit = await client.resolveTag(tag);
   if (dependencies.isActions && !tagCommit) throw new Error('GITHUB_RELEASE_EXISTING_TAG_REQUIRED');
   if (tagCommit && tagCommit !== sourceCommit) throw new Error('GITHUB_RELEASE_SOURCE_CONFLICT');
+  await requireCurrentVersion(client, release.version);
   const body = `Mawjivo ${mode === 'acceptance' ? 'قبول تجريبي' : 'إصدار'} ${release.version}\n\n${release.notesAr}\n\n<!-- mawjivo-release:v1 ${Buffer.from(JSON.stringify({ sourceCommit, version: release.version, sha256: release.sha256, mode })).toString('base64')} -->`;
   let archived = await client.getRelease(tag);
   if (
@@ -300,7 +310,7 @@ export async function archiveGithubRelease(input, overrides = {}) {
       archived = await client.createDraft({
         tag_name: tag,
         ...(tagCommit ? {} : { target_commitish: sourceCommit }),
-        name: `Mawjivo ${release.version}${mode === 'acceptance' ? ' — اختبار القبول' : ''}`,
+        name: `Mawjivo ${release.version}${staging || mode === 'acceptance' ? ' — اختبار القبول' : ''}`,
         body,
         draft: true,
         prerelease: staging || mode === 'acceptance',
@@ -309,6 +319,9 @@ export async function archiveGithubRelease(input, overrides = {}) {
     if (!Number.isSafeInteger(archived?.id) || archived.id <= 0)
       throw new Error('GITHUB_RELEASE_API_FAILED');
     const existing = await client.listAssets(archived.id);
+    const stagedCandidate =
+      archived.prerelease &&
+      existing.some((asset) => asset.name === 'update-test.json' && asset.state === 'uploaded');
     if (
       existing.some(
         (asset) =>
@@ -323,7 +336,7 @@ export async function archiveGithubRelease(input, overrides = {}) {
       let actual = existing.find((item) => item.name === asset.name);
       if (
         actual &&
-        archived.draft &&
+        (archived.draft || (!staging && stagedCandidate)) &&
         actual.state === 'starter' &&
         actual.size === 0 &&
         actual.digest == null &&
@@ -342,12 +355,15 @@ export async function archiveGithubRelease(input, overrides = {}) {
       const testManifest = existing.find((asset) => asset.name === 'update-test.json');
       if (testManifest) await client.deleteAsset(testManifest.id);
     }
-    if (archived.draft || (!staging && archived.prerelease && mode === 'production'))
+    if (archived.draft || (!staging && archived.prerelease && mode === 'production')) {
+      await requireCurrentVersion(client, release.version);
       await client.publishRelease(archived.id, {
+        name: `Mawjivo ${release.version}${staging || mode === 'acceptance' ? ' — اختبار القبول' : ''}`,
         draft: false,
         prerelease: staging || mode === 'acceptance',
         make_latest: staging || mode === 'acceptance' ? 'false' : 'true',
       });
+    }
     return { releaseId: archived.id, assetIds };
   } finally {
     await unlink(proofPath).catch(() => {});

@@ -20,7 +20,7 @@
   ],
   "vars": {
     "SERVICE_ID": "local-service",
-    "SERVICE_VERSION": "0.1.1",
+    "SERVICE_VERSION": "0.1.2",
     "R2_ACCOUNT_ID": "00000000000000000000000000000000",
     "MEDIA_BUCKET": "mawjivo-media",
   },

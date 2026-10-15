@@ -1,6 +1,6 @@
 {
   "name": "mawjivo",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "packageManager": "pnpm@12.11.2",
   "engines": {
@@ -25,8 +25,7 @@
     "test:scripts": "node --test scripts/test/*.test.mjs",
     "notices": "node scripts/generate-notices.mjs",
     "release:archive": "node scripts/github-release.mjs",
-    "release:publish": "node scripts/publish-release.mjs",
-    "release:cleanup": "node scripts/publish-release.mjs --cleanup"
+    "release:publish": "node scripts/github-release.mjs"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.13.0",
