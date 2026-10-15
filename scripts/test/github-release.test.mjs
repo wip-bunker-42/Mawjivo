@@ -68,6 +68,7 @@ async function fixture() {
       Object.assign(state.release, body);
       return state.release;
     },
+    deleteAsset: async (id) => { state.assets = state.assets.filter((asset) => asset.id !== id); },
   };
   return {
     packageDirectory,
@@ -194,7 +195,7 @@ test('a matching draft recovers a zero-byte starter left by a failed GitHub uplo
     };
     const result = await archiveGithubRelease(f.input, f.deps);
     assert.deepEqual(deleted, [99]);
-    assert.equal(result.assetIds.length, 4);
+    assert.equal(result.assetIds.length, 5);
     assert.equal(f.state.release.draft, false);
     assert.equal(f.state.uploads.filter((name) => name === f.release.name).length, 1);
   } finally {
@@ -244,7 +245,7 @@ test('an explicitly public repository archives only the proven signed package an
       ...f.deps,
       client: { ...f.client, repository: async () => ({ private: false }) },
     });
-    assert.equal(result.assetIds.length, 4);
+    assert.equal(result.assetIds.length, 5);
     assert.equal(f.state.published, 1);
     assert.ok(!f.state.uploads.some((name) => name.endsWith('.secrets.env')));
     await assert.rejects(
@@ -323,4 +324,43 @@ test('Actions never implicitly creates a new tag requiring permanent workflow cr
   } finally {
     await f.close();
   }
+});
+
+test('a signed candidate is anonymous prerelease only until actual acceptance permits promotion', async () => {
+  const f = await fixture();
+  try {
+    const testSignaturePath = join(f.packageDirectory, 'supplemental.sig');
+    await writeFile(testSignaturePath, 'test signature');
+    let verifiedTest = false;
+    const deps = { ...f.deps, verifyTestSignature: async () => { verifiedTest = true; } };
+    await archiveGithubRelease({ ...f.input, stageOnly: true, acceptanceProof: null, testSignaturePath }, deps);
+    assert.equal(verifiedTest, true);
+    assert.equal(f.state.release.draft, false);
+    assert.equal(f.state.release.prerelease, true);
+    assert.equal(f.state.release.make_latest, 'false');
+    assert.equal(f.state.contents.has('latest.json'), false);
+    const candidate = JSON.parse(f.state.contents.get('update-test.json'));
+    assert.equal(candidate.platforms['windows-x86_64'].signature, 'test signature');
+    assert.equal(candidate.platforms['windows-x86_64'].url, 'https://github.com/wip-bunker-42/Mawjivo/releases/download/v0.1.1/Mawjivo_0.1.1_x64-setup.exe');
+    assert.equal(f.state.contents.get(f.release.name + '.sig'), 'production signature');
+    await assert.rejects(archiveGithubRelease({ ...f.input, acceptanceProof: { ...f.acceptanceProof, vaultPreserved: false } }, f.deps));
+    assert.equal(f.state.release.prerelease, true);
+    await archiveGithubRelease(f.input, f.deps);
+    assert.equal(f.state.release.prerelease, false);
+    assert.equal(f.state.release.make_latest, 'true');
+    assert.equal(f.state.assets.some((asset) => asset.name === 'update-test.json'), false);
+    assert.equal(f.state.assets.length, 5);
+  } finally { await f.close(); }
+});
+
+test('an invalid supplemental signature prevents any candidate publication', async () => {
+  const f = await fixture();
+  try {
+    const testSignaturePath = join(f.packageDirectory, 'supplemental.sig');
+    await writeFile(testSignaturePath, 'test signature');
+    await assert.rejects(archiveGithubRelease({ ...f.input, stageOnly: true, acceptanceProof: null, testSignaturePath }, {
+      ...f.deps, verifyTestSignature: async () => { throw new Error('RELEASE_SIGNATURE_INVALID'); },
+    }), /RELEASE_SIGNATURE_INVALID/);
+    assert.equal(f.state.creates, 0);
+  } finally { await f.close(); }
 });
