@@ -18,6 +18,27 @@ pub struct UpdateProgress {
     pub phase: String,
 }
 pub struct TauriUpdater(pub AppHandle);
+pub fn validate_download_url(url: &reqwest::Url, bytes: u64) -> Result<(), AppError> {
+    if url.scheme() != "https"
+        || url.host_str() != Some("downloads.aimansour.com")
+        || url.port().is_some()
+        || !url.username().is_empty()
+        || url.password().is_some()
+        || url.query().is_some()
+        || url.fragment().is_some()
+        || !url.path().starts_with("/releases/")
+        || !url.path().ends_with(".exe")
+        || url.path().contains('%')
+        || bytes == 0
+        || bytes > MAX_UPDATE_BYTES
+    {
+        return Err(AppError::new(
+            "UPDATE_MANIFEST_INVALID",
+            "بيانات التحديث غير صالحة. أعد الفحص لاحقًا.",
+        ));
+    }
+    Ok(())
+}
 fn updater_error(error: tauri_plugin_updater::Error) -> AppError {
     use tauri_plugin_updater::Error;
     match error {
@@ -53,24 +74,7 @@ impl UpdateBackend for TauriUpdater {
         };
         let url = &offer.download_url;
         let bytes = offer.raw_json["bytes"].as_u64().unwrap_or(0);
-        if url.scheme() != "https"
-            || url.host_str() != Some("downloads.aimansour.com")
-            || url.port().is_some()
-            || !url.username().is_empty()
-            || url.password().is_some()
-            || url.query().is_some()
-            || url.fragment().is_some()
-            || !url.path().starts_with("/releases/")
-            || !url.path().ends_with(".exe")
-            || url.path().contains('%')
-            || bytes == 0
-            || bytes > MAX_UPDATE_BYTES
-        {
-            return Err(AppError::new(
-                "UPDATE_MANIFEST_INVALID",
-                "بيانات التحديث غير صالحة. أعد الفحص لاحقًا.",
-            ));
-        }
+        validate_download_url(url, bytes)?;
         let info = UpdateInfo {
             id: String::new(),
             version: offer.version.clone(),

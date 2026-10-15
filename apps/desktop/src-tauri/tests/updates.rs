@@ -7,6 +7,31 @@ use rusqlite::Connection;
 use serde_json::json;
 
 #[test]
+fn updater_accepts_our_public_github_installer_and_refuses_other_sources() {
+    use mawjivo_lib::updates::tauri_backend::validate_download_url;
+    let valid = "https://github.com/wip-bunker-42/Mawjivo/releases/download/v0.1.2/Mawjivo_0.1.2_x64-setup.exe";
+    validate_download_url(&valid.parse().unwrap(), 20_000_000).unwrap();
+    for invalid in [
+        "https://downloads.aimansour.com/releases/0.1.2/Mawjivo_0.1.2_x64-setup.exe",
+        "https://github.com/other/Mawjivo/releases/download/v0.1.2/Mawjivo_0.1.2_x64-setup.exe",
+        "https://github.com/wip-bunker-42/other/releases/download/v0.1.2/Mawjivo_0.1.2_x64-setup.exe",
+        "https://github.com/wip-bunker-42/Mawjivo/releases/download/v0.1.2/other.exe",
+        "http://github.com/wip-bunker-42/Mawjivo/releases/download/v0.1.2/Mawjivo_0.1.2_x64-setup.exe",
+        "https://user@github.com/wip-bunker-42/Mawjivo/releases/download/v0.1.2/Mawjivo_0.1.2_x64-setup.exe",
+        "https://github.com/wip-bunker-42/Mawjivo/releases/download/v0.1.2/Mawjivo_0.1.2_x64-setup.exe?token=unsafe",
+    ] {
+        assert_eq!(
+            validate_download_url(&invalid.parse().unwrap(), 20_000_000)
+                .unwrap_err()
+                .code,
+            "UPDATE_MANIFEST_INVALID"
+        );
+    }
+    assert!(validate_download_url(&valid.parse().unwrap(), 0).is_err());
+    assert!(validate_download_url(&valid.parse().unwrap(), 600_000_000).is_err());
+}
+
+#[test]
 fn signed_release_verification_checks_real_bytes_and_the_signed_version() {
     use mawjivo_lib::updates::verify_signed_release;
     let original = include_bytes!("../../../../tests/fixtures/update-signature/payload.bin");

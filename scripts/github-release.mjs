@@ -6,6 +6,22 @@ import { pathToFileURL, fileURLToPath } from 'node:url';
 import { verifyReleasePackage, hashFile } from './verify-release.mjs';
 import { stableVersion } from './release-records.mjs';
 const root = fileURLToPath(new URL('..', import.meta.url));
+export function githubUpdateManifest(release, tag, signature) {
+  stableVersion(release.version);
+  if (!/^[a-f0-9]{40}$/.test(release.sourceCommit) ||
+      ![ `v${release.version}`, `acceptance-v${release.version}-${release.sourceCommit.slice(0, 8)}` ].includes(tag) ||
+      !/^Mawjivo[A-Za-z0-9_.-]{1,160}\.exe$/.test(release.name) ||
+      typeof signature !== 'string' || !signature.trim() || signature.length > 4096)
+    throw new Error('GITHUB_RELEASE_INPUT');
+  return {
+    version: release.version, notes: release.notesAr, bytes: release.bytes,
+    sha256: release.sha256, sourceCommit: release.sourceCommit,
+    platforms: { 'windows-x86_64': {
+      url: `https://github.com/wip-bunker-42/Mawjivo/releases/download/${tag}/${release.name}`,
+      signature: signature.trim(),
+    } },
+  };
+}
 function gh(args, run = spawnSync) {
   const result = run('gh', args, {
     encoding: 'utf8',
@@ -212,6 +228,9 @@ export async function archiveGithubRelease(input, overrides = {}) {
     proofPath = join(temporary, 'acceptance-proof.json');
   try {
     await writeFile(proofPath, JSON.stringify(safeProof(acceptanceProof), null, 2) + '\n');
+    const manifestPath = join(temporary, 'latest.json');
+    await writeFile(manifestPath, JSON.stringify(githubUpdateManifest(release, tag,
+      await readFile(join(packageRoot, release.name + '.sig'), 'utf8')), null, 2) + '\n');
     const assets = [];
     for (const name of [release.name, release.name + '.sig', 'package-info.json']) {
       const path = join(packageRoot, name);
@@ -236,6 +255,8 @@ export async function archiveGithubRelease(input, overrides = {}) {
       sha256: await hashFile(proofPath),
       contentType: 'application/json',
     });
+    assets.push({ name: 'latest.json', path: manifestPath, bytes: (await stat(manifestPath)).size,
+      sha256: await hashFile(manifestPath), contentType: 'application/json' });
     if (!archived)
       archived = await client.createDraft({
         tag_name: tag,
@@ -283,6 +304,7 @@ export async function archiveGithubRelease(input, overrides = {}) {
     return { releaseId: archived.id, assetIds };
   } finally {
     await unlink(proofPath).catch(() => {});
+    await unlink(join(temporary, 'latest.json')).catch(() => {});
     await rmdir(temporary).catch(() => {});
   }
 }
