@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, writeFile, rm } from 'node:fs/promises';
+import { mkdtemp, writeFile, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createHash } from 'node:crypto';
@@ -38,7 +38,7 @@ async function fixture() {
     productionCandidate: true,
     verifiedAt: '2026-10-14T00:00:00.000Z',
   };
-  const state = { release: null, assets: [], creates: 0, uploads: [], published: 0, failAt: null };
+  const state = { release: null, assets: [], contents: new Map(), creates: 0, uploads: [], published: 0, failAt: null };
   const client = {
     repository: async () => ({ private: true }),
     resolveTag: async () => (state.release ? sourceCommit : null),
@@ -51,6 +51,7 @@ async function fixture() {
     listAssets: async () => state.assets,
     uploadAsset: async (id, asset) => {
       if (state.failAt === asset.name) throw new Error('NETWORK_FAILED');
+      state.contents.set(asset.name, await readFile(asset.path, 'utf8'));
       state.uploads.push(asset.name);
       const uploaded = {
         id: 10 + state.assets.length,
@@ -121,7 +122,7 @@ test('production mismatched package or binary digest cannot reach archive public
     await f.close();
   }
 });
-test('a partial draft resumes matching assets once and archives only four approved files', async () => {
+test('a partial draft resumes matching assets and publishes its signed GitHub update manifest', async () => {
   const f = await fixture();
   try {
     f.state.failAt = f.release.name + '.sig';
@@ -131,7 +132,7 @@ test('a partial draft resumes matching assets once and archives only four approv
     f.state.failAt = null;
     const result = await archiveGithubRelease(f.input, f.deps);
     assert.equal(result.releaseId, 9);
-    assert.equal(result.assetIds.length, 4);
+    assert.equal(result.assetIds.length, 5);
     await archiveGithubRelease(f.input, f.deps);
     assert.equal(f.state.creates, 1);
     assert.equal(f.state.uploads.filter((n) => n === f.release.name).length, 1);
@@ -142,9 +143,19 @@ test('a partial draft resumes matching assets once and archives only four approv
         f.release.name + '.sig',
         'package-info.json',
         'acceptance-proof.json',
+        'latest.json',
       ].sort(),
     );
     assert.ok(!f.state.uploads.some((n) => n.endsWith('.secrets.env')));
+    const manifest = JSON.parse(f.state.contents.get('latest.json'));
+    assert.deepEqual(manifest, {
+      version: '0.1.1', notes: 'نقل الإعدادات والتحديث.', bytes: 16,
+      sha256: sha(Buffer.from('signed installer')), sourceCommit,
+      platforms: { 'windows-x86_64': {
+        url: 'https://github.com/wip-bunker-42/Mawjivo/releases/download/v0.1.1/Mawjivo_0.1.1_x64-setup.exe',
+        signature: 'production signature',
+      } },
+    });
   } finally {
     await f.close();
   }
