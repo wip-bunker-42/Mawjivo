@@ -29,36 +29,36 @@ name = "mawjivo_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
-tauri-build = { version = "=2.7.1", features = [] }
+tauri-build = { version = "=2.7.2", features = [] }
 
 [dependencies]
 tauri = { version = "=2.12.2", features = [] }
 serde = { version = "=1.0.229", features = ["derive"] }
-serde_json = "=1.0.151"
+serde_json = "=1.0.154"
 keyring = "=4.2.0"
 rusqlite = { version = "=0.40.2", features = ["bundled"] }
 reqwest = { version = "=0.13.5", default-features = false, features = ["rustls", "json", "multipart", "stream"] }
-uuid = { version = "=1.27.0", features = ["v4"] }
-sha2 = "=0.11.0"
+uuid = { version = "=1.28.0", features = ["v4"] }
+sha2 = "=0.11.1"
 base64 = "=0.23.1"
 getrandom = "=0.4.3"
 zeroize = "=1.9.1"
-tokio = { version = "=1.53.2", features = ["sync", "fs", "io-util", "time", "macros"] }
+tokio = { version = "=1.53.3", features = ["sync", "fs", "io-util", "time", "macros"] }
 bytes = "=1.12.1"
 futures-util = "=0.3.34"
 async-trait = "=0.1.92"
 aes-gcm = "=0.11.1"
 image = { version = "=0.25.10", default-features = false, features = ["jpeg", "png", "webp", "bmp", "tiff", "gif", "pnm"] }
 fs4 = { version = "=1.1.0", default-features = false, features = ["sync"] }
-tauri-plugin-dialog = "=2.8.1"
+tauri-plugin-dialog = "=2.8.3"
 # Updates use signed NSIS executables; archive extraction is not part of our format.
-tauri-plugin-updater = { version = "=2.13.3", default-features = false, features = ["rustls-tls", "system-proxy"] }
+tauri-plugin-updater = { version = "=2.14.0", default-features = false, features = ["rustls-tls", "system-proxy"] }
 minisign-verify = "=0.3.0"
 unicode-segmentation = "=1.13.3"
 
 [dev-dependencies]
 tempfile = "=3.27.0"
-tokio = { version = "=1.53.2", features = ["macros", "rt-multi-thread"] }
+tokio = { version = "=1.53.3", features = ["macros", "rt-multi-thread"] }
 
 [profile.release]
 lto = "thin"
