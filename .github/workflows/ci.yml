@@ -12,7 +12,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.head.repo.full_name || github.repository }}-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 jobs:
   javascript:
@@ -142,4 +142,6 @@ jobs:
           pnpm --filter @mawjivo/desktop build
           mkdir -p apps/desktop/src-tauri/media-tools
           rustup toolchain install 1.99.0 --profile minimal
+          cargo fetch --manifest-path apps/desktop/src-tauri/Cargo.toml --locked
+          pnpm notices
           cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml --locked --all-targets
