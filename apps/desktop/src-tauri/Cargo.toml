@@ -1,7 +1,7 @@
 [package]
 name = "mawjivo"
 default-run = "mawjivo"
-version = "0.1.2"
+version = "0.1.3"
 description = "Accessible personal social publishing"
 edition = "2024"
 rust-version = "1.99"
@@ -51,7 +51,8 @@ aes-gcm = "=0.11.1"
 image = { version = "=0.25.10", default-features = false, features = ["jpeg", "png", "webp", "bmp", "tiff", "gif", "pnm"] }
 fs4 = { version = "=1.1.0", default-features = false, features = ["sync"] }
 tauri-plugin-dialog = "=2.8.1"
-tauri-plugin-updater = "=2.13.3"
+# Updates use signed NSIS executables; archive extraction is not part of our format.
+tauri-plugin-updater = { version = "=2.13.3", default-features = false, features = ["rustls-tls", "system-proxy"] }
 minisign-verify = "=0.3.0"
 unicode-segmentation = "=1.13.3"
 
